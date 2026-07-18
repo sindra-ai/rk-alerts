@@ -252,7 +252,7 @@ function ComingSoon({view}){
 
 /* ============ chrome ============ */
 function Sidebar({view,setView}){
-  return (<aside className="sidebar"><div className="logo"><span className="logomark">R<span className="lk">K</span></span><span className="logotext">RKFX</span></div>
+  return (<aside className="sidebar"><div className="logo"><img src="/logo-white.png" alt="RKFX" className="logoimg logo-dark"/><img src="/logo-black.png" alt="RKFX" className="logoimg logo-light"/></div>
     <nav className="nav">{NAV.map(([k,label,ic])=><button key={k} className={"navitem"+(view===k?" on":"")} onClick={()=>setView(k)}><span className="navic">{ic}</span><span className="navlabel">{label}</span></button>)}</nav>
     <div className="feedstat"><span className="fsdot"/>Feed Connected</div>
   </aside>);
@@ -306,6 +306,10 @@ function Style(){return <style>{`
 .logomark{font-family:${F.d};font-weight:700;font-size:26px;color:var(--ink);line-height:1}
 .lk{color:var(--teal)}
 .logotext{font-family:${F.d};font-weight:700;font-size:18px;letter-spacing:.22em;color:var(--ink)}
+.logoimg{height:38px;width:auto;display:block}
+.logo-light{display:none}
+.app[data-theme="light"] .logo-dark{display:none}
+.app[data-theme="light"] .logo-light{display:block}
 .nav{display:flex;flex-direction:column;gap:4px;flex:1}
 .navitem{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:12px;border:0;background:transparent;color:var(--muted);cursor:pointer;font-family:${F.b};font-size:14px;font-weight:500;transition:.15s;text-align:left}
 .navitem:hover{background:var(--card);color:var(--ink)}
