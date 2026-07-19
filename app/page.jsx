@@ -167,11 +167,9 @@ function SessionCard({rows,empty}){
   </div></div>);
 }
 function AlertHistory({history}){
-  const cutoff=Date.now()-24*3600*1000;
-  const recent=(history||[]).filter(s=>s.receivedAt&&new Date(s.receivedAt).getTime()>=cutoff).sort((a,b)=>new Date(b.receivedAt)-new Date(a.receivedAt));
   return (<div className="card"><div className="ctitle">Recent Alert History</div><div className="alist">
-    {recent.length===0&&<div className="empty2">No signals in the last 24h</div>}
-    {recent.slice(0,10).map(s=>(<div className="arow" key={s.id}><span className="adot" style={{background:s.direction==="SHORT"?"var(--red)":"var(--teal)"}}/><span className="asym">{s.strongPair||s.symbol}</span><span className="adir">{s.direction}</span><span className="atag">{(s.session||"").replace("_"," ")}</span><span className="atime">{s.receivedAt?timeAgo(s.receivedAt):""}</span></div>))}
+    {(!history||history.length===0)&&<div className="empty2">No signals yet</div>}
+    {(history||[]).slice(0,6).map(s=>(<div className="arow" key={s.id}><span className="adot" style={{background:s.direction==="SHORT"?"var(--red)":"var(--teal)"}}/><span className="asym">{s.strongPair||s.symbol}</span><span className="adir">{s.direction}</span><span className="atag">{(s.session||"").replace("_"," ")}</span><span className="atime">{s.receivedAt?timeAgo(s.receivedAt):""}</span></div>))}
   </div></div>);
 }
 function HeatCard({days}){
@@ -272,10 +270,10 @@ function TopBar({theme,toggleTheme,accts,acct,setAcct,view}){
 /* ===== analytics ===== */
 function sessOf(iso){if(!iso)return null;const d=new Date(new Date(iso).toLocaleString("en-US",{timeZone:"Europe/London"}));const h=d.getHours()+d.getMinutes()/60;if(h>=7&&h<10)return"LONDON";if(h>=13.5&&h<17)return"NY_AM";if(h>=18&&h<21.5)return"NY_PM";if(h>=0&&h<6)return"ASIA";return null;}
 function analyzeTs(trades,acct){
-  const closed=trades.filter(t=>t.pnl!=null&&!t.voided);
+  const closed=trades.filter(t=>t.pnl!=null&&t.exitedAt);
   const sm={};SESSIONS.forEach(s=>sm[s]={session:s,pnl:0,n:0});
-  let wins=0,losses=0,winSum=0,lossSum=0,net=0;const dm={};const sorted=[...closed].sort((a,b)=>new Date(a.time||a.exitedAt||a.enteredAt)-new Date(b.time||b.exitedAt||b.enteredAt));const eq=[];let run=0;
-  for(const t of sorted){const p=Number(t.pnl)-(Number(t.fees)||0);net+=p;run+=p;eq.push(run);if(p>0){wins++;winSum+=p;}else if(p<0){losses++;lossSum+=p;}const se=sessOf(t.time||t.exitedAt||t.enteredAt);if(se&&sm[se]){sm[se].pnl+=p;sm[se].n++;}const day=(t.time||t.exitedAt||t.enteredAt||"").slice(0,10);if(day)dm[day]=(dm[day]||0)+p;}
+  let wins=0,losses=0,winSum=0,lossSum=0,net=0;const dm={};const sorted=[...closed].sort((a,b)=>new Date(a.exitedAt||a.enteredAt)-new Date(b.exitedAt||b.enteredAt));const eq=[];let run=0;
+  for(const t of sorted){const p=Number(t.pnl);net+=p;run+=p;eq.push(run);if(p>0){wins++;winSum+=p;}else if(p<0){losses++;lossSum+=p;}const se=sessOf(t.exitedAt||t.enteredAt);if(se&&sm[se]){sm[se].pnl+=p;sm[se].n++;}const day=(t.exitedAt||t.enteredAt||"").slice(0,10);if(day)dm[day]=(dm[day]||0)+p;}
   const decided=wins+losses;
   const cal=[];const today=new Date();for(let i=55;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);cal.push({date:k,pnl:dm[k]??null});}
   const avgWin=wins?winSum/wins:null;const avgLoss=losses?lossSum/losses:null;
