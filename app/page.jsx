@@ -26,6 +26,9 @@ const Ico = {
 };
 
 function Logo({dark,className}){
+  const [err,setErr]=useState(false);
+  const src=dark?"/logo-white.png":"/logo-black.png";
+  if(!err)return <img src={src} className={className+" object-contain"} alt="RKFX" onError={()=>setErr(true)}/>;
   const fg=dark?"#FFFFFF":"#0D111E";
   return (<svg viewBox="0 0 132 34" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="1" y="4" width="26" height="26" rx="7" fill="url(#lg)"/>
@@ -34,6 +37,11 @@ function Logo({dark,className}){
     <text x="92" y="23" fontFamily="Outfit,sans-serif" fontSize="18" fontWeight="800" fill="#E28D13">.trade</text>
     <defs><linearGradient id="lg" x1="1" y1="4" x2="27" y2="30"><stop stopColor="#F2A922"/><stop offset="1" stopColor="#E28D13"/></linearGradient></defs>
   </svg>);
+}
+function Avatar({className}){
+  const [err,setErr]=useState(false);
+  if(!err)return <img src="/avatar.png" className={className+" rounded-full object-cover"} alt="" onError={()=>setErr(true)}/>;
+  return <div className={className+" rounded-full bg-gradient-to-br from-amber-400 to-emerald-500 grid place-items-center text-[11px] font-bold text-black font-outfit"}>RK</div>;
 }
 const api = {
   journal:()=>fetch("/api/journal",{cache:"no-store"}).then(r=>r.json()).then(d=>d.trades||[]),
@@ -46,6 +54,7 @@ const api = {
 export default function Page(){
   const [dark,setDark]=useState(true);
   const [view,setView]=useState("dashboard");
+  const [query,setQuery]=useState("");
   const [journal,setJournal]=useState([]);
   const [live,setLive]=useState(null);
   const [accts,setAccts]=useState({configured:false,accounts:[]});
@@ -70,10 +79,10 @@ export default function Page(){
 
   return (<div className={dark?"dark":""}>
     <div className="min-h-screen w-full flex flex-col overflow-x-hidden font-figtree" style={{background:bg,backgroundAttachment:"fixed"}}>
-      <TopBar dark={dark} toggle={toggle} view={view} setView={setView} accts={accts} acct={acct} setAcct={setAcct}/>
+      <TopBar dark={dark} toggle={toggle} view={view} setView={setView} accts={accts} acct={acct} setAcct={setAcct} query={query} setQuery={setQuery}/>
       <div className="w-full max-w-[1920px] mx-auto px-5 md:px-10 pt-4 md:pt-8 pb-24 md:pb-10 flex flex-col gap-5 md:gap-6">
         {view==="dashboard" && <Dashboard ts={ts} jstats={jstats} live={live} acct={acct}/>}
-        {view==="journal" && <Journal trades={journal} stats={jstats} reload={loadJ}/>}
+        {view==="journal" && <Journal trades={journal} stats={jstats} reload={loadJ} query={query}/>}
         {(view==="analytics"||view==="calendar"||view==="settings") && <ComingSoon view={view}/>}
       </div>
       <MobileNav view={view} setView={setView}/>
@@ -82,9 +91,10 @@ export default function Page(){
 }
 
 /* ============ TOP BAR ============ */
-function TopBar({dark,toggle,view,setView,accts,acct,setAcct}){
+function TopBar({dark,toggle,view,setView,accts,acct,setAcct,query,setQuery}){
   const [open,setOpen]=useState(false);
   const acctLabel=acct?`${acct.name} (${acct.id})`:"No account";
+  const onSearch=(v)=>{setQuery(v);if(v&&view!=="journal")setView("journal");};
   return (<>
     {/* DESKTOP */}
     <div className="hidden md:flex sticky top-0 z-30 self-stretch px-8 py-4 bg-white/40 dark:bg-neutral-900/60 border-b border-white/20 dark:border-amber-500/20 backdrop-blur-lg justify-between items-center">
@@ -92,7 +102,8 @@ function TopBar({dark,toggle,view,setView,accts,acct,setAcct}){
         <Logo dark={dark} className="h-9 w-auto"/>
         <div className="px-4 py-2 bg-black/5 dark:bg-white/10 rounded-[100px] outline outline-1 outline-transparent dark:outline-white/10 flex items-center gap-2">
           <Ico.search width="14" height="14" className="text-zinc-600 dark:text-zinc-400"/>
-          <span className="text-zinc-400 text-xs font-figtree">Search setups...</span>
+          <input value={query} onChange={e=>onSearch(e.target.value)} placeholder="Search setups..." className="bg-transparent outline-none text-xs font-figtree text-gray-900 dark:text-white placeholder:text-zinc-400 w-40"/>
+          {query&&<button onClick={()=>setQuery("")} className="text-zinc-400 text-xs leading-none">×</button>}
         </div>
       </div>
       <div className="p-1 bg-black/0 dark:bg-white/5 rounded-[100px] outline outline-1 outline-offset-[-1px] outline-black/5 dark:outline-white/10 flex items-center gap-2">
@@ -118,7 +129,7 @@ function TopBar({dark,toggle,view,setView,accts,acct,setAcct}){
           {dark?<Ico.moon width="15" height="15"/>:<Ico.sun width="15" height="15"/>}
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="size-9 rounded-full bg-gradient-to-br from-amber-400 to-emerald-500 grid place-items-center text-[11px] font-bold text-black font-outfit">RK</div>
+          <Avatar className="size-9"/>
           <div className="flex flex-col">
             <span className="text-gray-900 dark:text-white text-xs font-semibold font-outfit">Rohit Kalyana</span>
             <span className="text-zinc-400 text-xs font-figtree">Futures Trader</span>
@@ -134,7 +145,7 @@ function TopBar({dark,toggle,view,setView,accts,acct,setAcct}){
           <button onClick={toggle} className="p-1.5 bg-black/5 dark:bg-white/5 rounded-[100px] grid place-items-center text-gray-900 dark:text-white" aria-label="theme">
             {dark?<Ico.moon width="16" height="16"/>:<Ico.sun width="16" height="16"/>}
           </button>
-          <div className="size-7 rounded-full bg-gradient-to-br from-amber-400 to-emerald-500"/>
+          <Avatar className="size-7"/>
         </div>
       </div>
       <div className="px-5 py-1.5 backdrop-blur-lg bg-white/20 dark:bg-neutral-900/40">
@@ -336,11 +347,14 @@ function Equity({series}){
 
 /* ============ JOURNAL ============ */
 const emptyForm={model:"Phase 4",pair:"NQ1!",direction:"LONG",session:"NY_AM",entry:"",sl:"",tp:"",rr:2,outcome:"open",rResult:""};
-function Journal({trades,stats,reload}){
+function Journal({trades,stats,reload,query}){
   const [filter,setFilter]=useState("All");const [period,setPeriod]=useState("Daily");const [adding,setAdding]=useState(false);const [form,setForm]=useState(emptyForm);
   const filts=["All Trades","Manual","Phase 4","Phase 3","Phase 2","Wins","Losses","BE"];
   const mfilts=["All Trades","Wins","Losses","Phase 4"];
-  const filtered=trades.filter(t=>{const m=t.model||(t.source==="manual"?"Manual":"—");if(filter==="All"||filter==="All Trades")return true;if(filter==="Wins")return t.outcome==="win";if(filter==="Losses")return t.outcome==="loss";if(filter==="BE")return t.outcome==="be";return m===filter;});
+  const q=(query||"").trim().toLowerCase();
+  const filtered=trades.filter(t=>{const m=t.model||(t.source==="manual"?"Manual":"—");
+    if(q){const hay=`${t.pair||""} ${m} ${t.direction||""} ${SESS_FULL[t.session]||t.session||""} ${t.outcome||""}`.toLowerCase();if(!hay.includes(q))return false;}
+    if(filter==="All"||filter==="All Trades")return true;if(filter==="Wins")return t.outcome==="win";if(filter==="Losses")return t.outcome==="loss";if(filter==="BE")return t.outcome==="be";return m===filter;});
   const setOutcome=async(t,o)=>{let r=t.rResult;if(o==="win"&&(r==null||r===""))r=t.rr||2;if(o==="loss")r=-1;if(o==="be")r=0;await api.jpatch(t.id,{outcome:o,rResult:r,taken:true});reload();};
   const submit=async()=>{await api.jadd({...form,source:form.model==="Manual"?"manual":"tool",taken:form.outcome!=="open",entry:num(form.entry),sl:num(form.sl),tp:num(form.tp),rr:num(form.rr),rResult:num(form.rResult),tradedAt:new Date().toISOString().slice(0,10)});setForm(emptyForm);setAdding(false);reload();};
   return (<>
