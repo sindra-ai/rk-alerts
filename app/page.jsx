@@ -273,7 +273,7 @@ function analyzeTs(trades,acct){
   const closed=trades.filter(t=>t.pnl!=null&&t.exitedAt);
   const sm={};SESSIONS.forEach(s=>sm[s]={session:s,pnl:0,n:0});
   let wins=0,losses=0,winSum=0,lossSum=0,net=0;const dm={};const sorted=[...closed].sort((a,b)=>new Date(a.exitedAt||a.enteredAt)-new Date(b.exitedAt||b.enteredAt));const eq=[];let run=0;
-  for(const t of sorted){const p=Number(t.pnl);net+=p;run+=p;eq.push(run);if(p>0){wins++;winSum+=p;}else if(p<0){losses++;lossSum+=p;}const se=sessOf(t.exitedAt||t.enteredAt);if(se&&sm[se]){sm[se].pnl+=p;sm[se].n++;}const day=(t.exitedAt||t.enteredAt||"").slice(0,10);if(day)dm[day]=(dm[day]||0)+p;}
+  for(const t of sorted){const p=(t.netPnl!=null?Number(t.netPnl):Number(t.pnl));net+=p;run+=p;eq.push(run);if(p>0){wins++;winSum+=p;}else if(p<0){losses++;lossSum+=p;}const se=sessOf(t.exitedAt||t.enteredAt);if(se&&sm[se]){sm[se].pnl+=p;sm[se].n++;}const day=(t.exitedAt||t.enteredAt||"").slice(0,10);if(day)dm[day]=(dm[day]||0)+p;}
   const decided=wins+losses;
   const cal=[];const today=new Date();for(let i=55;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);cal.push({date:k,pnl:dm[k]??null});}
   const avgWin=wins?winSum/wins:null;const avgLoss=losses?lossSum/losses:null;
