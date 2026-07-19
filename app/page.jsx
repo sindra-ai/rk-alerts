@@ -332,7 +332,7 @@ function CalendarCard({days}){
     <div className="flex gap-2 md:gap-4 md:pt-3 overflow-x-auto">
       <div className="flex flex-col gap-1.5 md:gap-2 pt-[22px] md:pt-[27px] flex-shrink-0">{DAYS.map(d=><div key={d} className={"h-4 md:h-5 flex items-center text-[10px] md:text-xs font-figtree w-6 "+FAINT}>{d}</div>)}</div>
       <div className="flex-1 flex gap-1.5 md:gap-3 min-w-[300px]">
-        {weeks.map((wk,i)=>(<div key={i} className="flex-1 flex flex-col gap-1.5 md:gap-2"><span className={"text-center text-[10px] md:text-xs font-figtree "+FAINT}>W{i+1}</span>{wk.map((c,j)=><div key={j} className={"h-4 md:h-5 rounded-[3px] md:rounded-sm "+cell(c)} title={c&&c.date?`${c.date}${c.pnl!=null?" "+money(c.pnl):""}`:""}/>)}</div>))}
+        {weeks.map((wk,i)=>{const f=wk[0]&&wk[0].date;const lbl=f?new Date(f+"T00:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):`W${i+1}`;return(<div key={i} className="flex-1 flex flex-col gap-1.5 md:gap-2"><span className={"text-center text-[10px] md:text-xs font-figtree "+FAINT}>{lbl}</span>{wk.map((c,j)=><div key={j} className={"h-4 md:h-5 rounded-[3px] md:rounded-sm "+cell(c)} title={c&&c.date?`${c.date}${c.pnl!=null?" "+money(c.pnl):""}`:""}/>)}</div>);})}
       </div>
     </div>
     <div className="md:hidden flex justify-center items-center gap-2"><span className={"text-xs font-figtree "+FAINT}>Loss</span><div className="size-2.5 bg-red-600 dark:bg-rose-500 rounded-xs"/><div className="size-2.5 bg-black/5 dark:bg-white/5 rounded-xs"/><div className="size-2.5 bg-green-700 dark:bg-emerald-500 rounded-xs"/><span className={"text-xs font-figtree "+FAINT}>Win</span></div>
@@ -417,7 +417,13 @@ function JRowDesk({t,i,setOutcome,del}){
 }
 function JCardMob({t,setOutcome,del}){
   const dc=t.direction==="SHORT"?LOSS:WIN;const oc=t.outcome;const ocC=oc==="win"?WIN:oc==="loss"?LOSS:FAINT;
-  return (<div className={"p-3 flex flex-col gap-2.5 "+CARD2}>
+  const [dx,setDx]=useState(0);const [drag,setDrag]=useState(false);const start=useRef(0);
+  const onStart=e=>{start.current=e.touches[0].clientX;setDrag(true);};
+  const onMove=e=>{const d=e.touches[0].clientX-start.current;setDx(Math.max(Math.min(d,0),-96));};
+  const onEnd=()=>{setDrag(false);setDx(dx<=-56?-84:0);};
+  return (<div className="relative overflow-hidden rounded-2xl">
+    <button onClick={()=>del(t)} title="Delete" className="absolute right-0 top-0 bottom-0 w-[84px] bg-rose-500 text-white flex flex-col items-center justify-center gap-1"><Ico.trash width="18" height="18"/><span className="text-[10px] font-semibold font-outfit">Delete</span></button>
+    <div onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} style={{transform:`translateX(${dx}px)`,transition:drag?"none":"transform .18s ease"}} className={"relative p-3 flex flex-col gap-2.5 "+CARD2}>
     <div className="flex justify-between items-center">
       <div className="flex items-center gap-1.5"><span className={"text-base font-bold font-outfit "+HEAD}>{(t.pair||"").replace("1!","")}</span><span className="px-1.5 py-0.5 rounded-sm text-[10px] font-semibold font-outfit bg-amber-500/10 text-amber-500">{t.model||"Manual"}</span></div>
       <div className="flex items-center gap-2"><span className={"text-xs font-figtree "+FAINT}>{t.tradedAt||""}</span><button onClick={()=>del(t)} title="Delete" className="w-6 h-6 grid place-items-center rounded text-zinc-400 hover:text-rose-500 bg-black/5 dark:bg-white/5"><Ico.trash width="13" height="13"/></button></div>
@@ -430,6 +436,7 @@ function JCardMob({t,setOutcome,del}){
     <div className="flex items-center gap-2 flex-wrap">
       <span className={"text-xs font-figtree "+FAINT}>Stop: {t.sl??"—"}</span><span className={"text-xs "+FAINT}>•</span><span className={"text-xs font-figtree "+FAINT}>Target: {t.tp??"—"}</span>
       <span className={"px-1.5 py-0.5 rounded-sm text-[9px] font-outfit bg-black/5 dark:bg-white/5 "+MUT}>{SESS_LABEL[t.session]||t.session}</span>
+    </div>
     </div>
   </div>);
 }
@@ -481,13 +488,20 @@ function ComingSoon({view}){
 
 /* ============ analytics helpers ============ */
 function sessOf(iso){if(!iso)return null;const d=new Date(new Date(iso).toLocaleString("en-US",{timeZone:"Europe/London"}));const h=d.getHours()+d.getMinutes()/60;if(h>=7&&h<10)return"LONDON";if(h>=13.5&&h<17)return"NY_AM";if(h>=18&&h<21.5)return"NY_PM";if(h>=0&&h<6)return"ASIA";return null;}
+function ymd(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function ctDay(iso){if(!iso)return null;return ymd(new Date(new Date(iso).toLocaleString("en-US",{timeZone:"America/Chicago"})));}
 function analyzeTs(trades,acct){
   const closed=trades.filter(t=>t.pnl!=null&&!t.voided);
   const sm={};SESSIONS.forEach(s=>sm[s]={session:s,pnl:0,n:0});
   let wins=0,losses=0,winSum=0,lossSum=0,net=0;const dm={};const sorted=[...closed].sort((a,b)=>new Date(a.time||a.exitedAt||a.enteredAt)-new Date(b.time||b.exitedAt||b.enteredAt));const eq=[];let run=0;
-  for(const t of sorted){const p=Number(t.pnl);net+=p;run+=p;eq.push(run);if(p>0){wins++;winSum+=p;}else if(p<0){losses++;lossSum+=p;}const se=sessOf(t.time||t.exitedAt||t.enteredAt);if(se&&sm[se]){sm[se].pnl+=p;sm[se].n++;}const day=(t.time||t.exitedAt||t.enteredAt||"").slice(0,10);if(day)dm[day]=(dm[day]||0)+p;}
+  for(const t of sorted){const p=Number(t.pnl);net+=p;run+=p;eq.push(run);if(p>0){wins++;winSum+=p;}else if(p<0){losses++;lossSum+=p;}const se=sessOf(t.time||t.exitedAt||t.enteredAt);if(se&&sm[se]){sm[se].pnl+=p;sm[se].n++;}const day=ctDay(t.time||t.exitedAt||t.enteredAt);if(day)dm[day]=(dm[day]||0)+p;}
   const decided=wins+losses;
-  const cal=[];const today=new Date();for(let i=55;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);cal.push({date:k,pnl:dm[k]??null});}
+  const cal=[];const WEEKS=8;
+  const nowCT=new Date(new Date().toLocaleString("en-US",{timeZone:"America/Chicago"}));
+  const dow=(nowCT.getDay()+6)%7; // 0=Mon .. 6=Sun
+  const monThis=new Date(nowCT);monThis.setDate(nowCT.getDate()-dow);monThis.setHours(0,0,0,0);
+  for(let w=0;w<WEEKS;w++){const wkMon=new Date(monThis);wkMon.setDate(monThis.getDate()-(WEEKS-1-w)*7);
+    for(let d=0;d<7;d++){const day=new Date(wkMon);day.setDate(wkMon.getDate()+d);const k=ymd(day);const future=day>nowCT;cal.push({date:k,pnl:future?null:(dm[k]??null),future});}}
   const avgWin=wins?winSum/wins:null;const avgLoss=losses?lossSum/losses:null;
   return {decided,winRate:decided?wins/decided:0,avgWin,avgLoss,rr:(avgWin!=null&&avgLoss)?avgWin/Math.abs(avgLoss):null,netPnl:closed.length?net:null,pnlPct:(acct&&acct.balance)?(net/acct.balance)*100:null,sessions:SESSIONS.map(s=>sm[s]),calendar:cal,equity:eq};
 }
