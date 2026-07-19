@@ -173,8 +173,28 @@ function AlertHistory({history}){
   </div></div>);
 }
 function HeatCard({days}){
+  const map={};(days||[]).forEach(d=>{if(d&&d.date)map[d.date]=d.pnl;});
+  const WD=["M","T","W","T","F","S","S"];
+  const todayKey=new Date().toISOString().slice(0,10);
+  const today=new Date(todayKey+"T00:00:00Z");
+  const monIdx=(today.getUTCDay()+6)%7;                 // 0=Mon .. 6=Sun
+  const end=new Date(today);end.setUTCDate(end.getUTCDate()+(6-monIdx)); // Sunday of current week
+  const start=new Date(end);start.setUTCDate(start.getUTCDate()-27);     // 4 weeks back (a Monday)
+  const cells=[];
+  for(let i=0;i<28;i++){
+    const d=new Date(start);d.setUTCDate(start.getUTCDate()+i);
+    const key=d.toISOString().slice(0,10);
+    const future=key>todayKey;
+    cells.push({key,pnl:future?undefined:map[key],future});
+  }
   return (<div className="card"><div className="ctitle">Weekly Outcome Heatmap</div>
-    <div className="heat">{days.slice(-40).map((d,i)=>{const t=d.pnl;const bg=t==null?"var(--track)":t>0?"var(--teal)":t<0?"var(--red)":"var(--track)";return <div key={i} className="hc" style={{background:bg,opacity:t==null?1:0.75}} title={d.date+(t!=null?` ${money(t)}`:"")}/>;})}</div>
+    <div className="heathead">{WD.map((w,i)=><span key={i} className="hdw">{w}</span>)}</div>
+    <div className="heat">{cells.map((c,i)=>{
+      const t=c.pnl;
+      const bg=c.future?"transparent":(t==null?"var(--track)":t>0?"var(--teal)":t<0?"var(--red)":"var(--track)");
+      const title=c.future?c.key:c.key+(t!=null?` · ${money(t)}`:" · no trades");
+      return <div key={i} className={"hc"+(c.future?" hcf":"")} style={{background:bg}} title={title}/>;
+    })}</div>
     <div className="hleg"><span className="hd" style={{background:"var(--teal)"}}/>Win Day<span className="hd hd2" style={{background:"var(--red)"}}/>Loss Day</div>
   </div>);
 }
@@ -297,8 +317,8 @@ function Style(){return <style>{`
 .app[data-theme="light"]{--bg:#EEF1F6;--side:#FFFFFF;--card:#FFFFFF;--cardb:rgba(16,24,40,0.09);--ink:#0F1826;--muted:#5A6678;--faint:#94A0B2;--line:rgba(16,24,40,0.08);--track:rgba(16,24,40,0.05);--input:rgba(16,24,40,0.03);--menu:#ffffff}
 .app{--teal:#00e5bf;--green:#16c784;--red:#f0435c;--violet:#7F56D9;--maxw:2000px;color:var(--ink);background:var(--bg)}
 .sidebar{position:sticky;top:0;height:100vh;width:clamp(210px,15vw,248px);flex-shrink:0;background:var(--side);border-right:1px solid var(--line);backdrop-filter:blur(20px);display:flex;flex-direction:column;padding:26px 16px;gap:28px;z-index:20}
-.logo{display:flex;align-items:center;padding:0 8px 4px}
-.logoimg{height:52px;width:auto;display:block}
+.logo{display:flex;align-items:center;justify-content:center;padding:4px 4px 10px}
+.logoimg{height:96px;width:auto;max-width:100%;object-fit:contain;display:block}
 .logo-light{display:none}
 .app[data-theme="light"] .logo-dark{display:none}
 .app[data-theme="light"] .logo-light{display:block}
@@ -384,7 +404,10 @@ function Style(){return <style>{`
 .alist{display:flex;flex-direction:column;gap:10px}
 .arow{display:flex;align-items:center;gap:8px;font-size:13px}
 .adot{width:6px;height:6px;border-radius:50%;flex-shrink:0}.asym{font-family:${F.d};font-weight:600}.adir{color:var(--faint);font-size:11px}.atag{margin-left:auto;font-size:10px;color:var(--muted);background:var(--input);padding:2px 6px;border-radius:4px}.atime{font-size:12px;color:var(--faint);min-width:52px;text-align:right}
-.heat{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.heat{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.heathead{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.hdw{font-size:10px;color:var(--faint);text-align:center;font-weight:500}
+.hc.hcf{border:1px dashed var(--line)}
 .hc{aspect-ratio:1;border-radius:4px}
 .hleg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-top:14px}
 .hd{width:8px;height:8px;border-radius:2px}.hd2{margin-left:8px}
@@ -421,7 +444,7 @@ select.fin{appearance:none;cursor:pointer}
 .cstitle{font-family:${F.d};font-weight:700;font-size:30px}
 .cssub{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:8px}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
-@media(max-width:1200px){.grid-r1,.grid-r3{grid-template-columns:1fr}.grid-kpi{grid-template-columns:repeat(2,1fr)}.grid-r4{grid-template-columns:1fr}.heat{grid-template-columns:repeat(10,1fr)}}
+@media(max-width:1200px){.grid-r1,.grid-r3{grid-template-columns:1fr}.grid-kpi{grid-template-columns:repeat(2,1fr)}.grid-r4{grid-template-columns:1fr}.heat{grid-template-columns:repeat(7,1fr)}}
 @media(max-width:720px){
 .sidebar{position:fixed;bottom:0;top:auto;left:0;right:0;width:100%;height:64px;flex-direction:row;padding:0 4px;border-right:0;border-top:1px solid var(--line);gap:0;backdrop-filter:blur(24px)}
 .logo,.feedstat{display:none}
