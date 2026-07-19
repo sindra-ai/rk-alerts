@@ -19,7 +19,7 @@ const Ico = {
   plus:(p)=><svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>,
   arrow:(p)=><svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M9 7h8v8"/></svg>,
 };
-const NAV = [["dashboard","Dashboard","grid"],["journal","Trade Journal","book"],["analytics","Analytics","chart"],["calendar","Economic Calendar","cal"],["settings","Account Settings","gear"]];
+const NAV = [["dashboard","Dashboard","grid","Dashboard"],["journal","Trade Journal","book","Journal"],["analytics","Analytics","chart","Analytics"],["calendar","Economic Calendar","cal","Calendar"],["settings","Account Settings","gear","Account"]];
 
 const api = {
   journal:()=>fetch("/api/journal",{cache:"no-store"}).then(r=>r.json()).then(d=>d.trades||[]),
@@ -247,7 +247,7 @@ function ComingSoon({view}){
 /* ===== chrome ===== */
 function Sidebar({view,setView}){
   return (<aside className="sidebar"><div className="logo"><img src="/logo-white.png" alt="RKFX" className="logoimg logo-dark"/><img src="/logo-black.png" alt="RKFX" className="logoimg logo-light"/></div>
-    <nav className="nav">{NAV.map(([k,label,ic])=>{const I=Ico[ic];return <button key={k} className={"navitem"+(view===k?" on":"")} onClick={()=>setView(k)}><span className="navic"><I width="20" height="20"/></span><span className="navlabel">{label}</span></button>;})}</nav>
+    <nav className="nav">{NAV.map(([k,label,ic,short])=>{const I=Ico[ic];return <button key={k} className={"navitem"+(view===k?" on":"")} onClick={()=>setView(k)}><span className="navic"><I width="20" height="20"/></span><span className="navlabel">{label}</span><span className="navlabel-sm">{short||label}</span></button>;})}</nav>
     <div className="feedstat"><span className="fsdot"/>Feed Connected</div>
   </aside>);
 }
@@ -307,6 +307,7 @@ function Style(){return <style>{`
 .navitem:hover{background:var(--card);color:var(--ink)}
 .navitem.on{background:color-mix(in srgb,var(--teal) 12%,transparent);color:var(--teal);font-weight:600}
 .navic{display:flex;align-items:center;justify-content:center;width:20px;flex-shrink:0}
+.navlabel-sm{display:none}
 .feedstat{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:0 10px}
 .fsdot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal)}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -422,17 +423,23 @@ select.fin{appearance:none;cursor:pointer}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 @media(max-width:1200px){.grid-r1,.grid-r3{grid-template-columns:1fr}.grid-kpi{grid-template-columns:repeat(2,1fr)}.grid-r4{grid-template-columns:1fr}.heat{grid-template-columns:repeat(10,1fr)}}
 @media(max-width:720px){
-.sidebar{position:fixed;bottom:0;top:auto;left:0;right:0;width:100%;height:64px;flex-direction:row;padding:0 6px;border-right:0;border-top:1px solid var(--line);gap:0;backdrop-filter:blur(24px)}
+.sidebar{position:fixed;bottom:0;top:auto;left:0;right:0;width:100%;height:64px;flex-direction:row;padding:0 4px;border-right:0;border-top:1px solid var(--line);gap:0;backdrop-filter:blur(24px)}
 .logo,.feedstat{display:none}
 .nav{flex-direction:row;justify-content:space-around;width:100%;gap:0}
-.navitem{flex-direction:column;gap:4px;padding:8px 6px;flex:1;justify-content:center}
-.navlabel{font-size:9px}
+.navitem{flex-direction:column;gap:3px;padding:6px 2px;flex:1;min-width:0;justify-content:center;text-align:center}
+.navlabel{display:none}
+.navlabel-sm{display:block;font-size:10px;line-height:1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .navitem.on{background:transparent;color:var(--teal)}
-.main{padding-bottom:72px}
-.search{width:100%}.profile{display:none}.grid-kpi{grid-template-columns:repeat(2,1fr)}
+.main{padding-bottom:76px}
+.topinner{padding:12px 14px;gap:8px}
+.search{flex:1;min-width:0;width:auto}
+.tbr{gap:8px;flex-shrink:0;min-width:0}
+.acctwrap{min-width:0}
+.acctbtn{max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 12px}
+.profile{display:none}
+.grid-kpi{grid-template-columns:repeat(2,1fr)}
 .params4{grid-template-columns:1fr 1fr}
-.topbar{padding:12px 16px;gap:10px}
-.tbr{gap:8px}
+.heat{grid-template-columns:repeat(7,1fr)}
 .jkpi{grid-template-columns:1fr 1fr}
 .addform{right:12px;left:12px;bottom:80px;width:auto}
 .fg{grid-template-columns:1fr}
