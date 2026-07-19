@@ -253,7 +253,7 @@ function Sidebar({view,setView}){
 }
 function TopBar({theme,toggleTheme,accts,acct,setAcct,view}){
   const [open,setOpen]=useState(false);
-  return (<header className="topbar">
+  return (<header className="topbar"><div className="topinner">
     <div className="search"><Ico.search width="17" height="17"/><input placeholder="Search parameters..." className="searchin"/></div>
     <div className="tbr">
       <button className="iconbtn" onClick={toggleTheme} aria-label="theme">{theme==="dark"?<Ico.moon width="17" height="17"/>:<Ico.sun width="17" height="17"/>}</button>
@@ -264,7 +264,7 @@ function TopBar({theme,toggleTheme,accts,acct,setAcct,view}){
       <div className="profile"><div className="pname">Rohit Kalyana</div><div className="prole">Futures Trader</div></div>
       <div className="avatar">RK</div>
     </div>
-  </header>);
+  </div></header>);
 }
 
 /* ===== analytics ===== */
@@ -295,7 +295,7 @@ function Style(){return <style>{`
 .app{min-height:100vh;display:flex;font-family:${F.b}}
 .app[data-theme="dark"]{--bg:#060A12;--side:rgba(9,13,22,0.85);--card:rgba(12,19,34,0.8);--cardb:rgba(255,255,255,0.08);--ink:#FFFFFF;--muted:#8f9cae;--faint:#52637a;--line:rgba(255,255,255,0.08);--track:rgba(255,255,255,0.05);--input:rgba(255,255,255,0.03)}
 .app[data-theme="light"]{--bg:#EEF1F6;--side:#FFFFFF;--card:#FFFFFF;--cardb:rgba(16,24,40,0.09);--ink:#0F1826;--muted:#5A6678;--faint:#94A0B2;--line:rgba(16,24,40,0.08);--track:rgba(16,24,40,0.05);--input:rgba(16,24,40,0.03)}
-.app{--teal:#00e5bf;--green:#16c784;--red:#f0435c;--violet:#7F56D9;color:var(--ink);background:var(--bg)}
+.app{--teal:#00e5bf;--green:#16c784;--red:#f0435c;--violet:#7F56D9;--maxw:2000px;color:var(--ink);background:var(--bg)}
 .sidebar{position:sticky;top:0;height:100vh;width:clamp(210px,15vw,248px);flex-shrink:0;background:var(--side);border-right:1px solid var(--line);backdrop-filter:blur(20px);display:flex;flex-direction:column;padding:26px 16px;gap:28px;z-index:20}
 .logo{display:flex;align-items:center;padding:0 8px 4px}
 .logoimg{height:52px;width:auto;display:block}
@@ -310,7 +310,8 @@ function Style(){return <style>{`
 .feedstat{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:0 10px}
 .fsdot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal)}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
-.topbar{position:sticky;top:0;z-index:15;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px clamp(18px,2.5vw,36px);background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.topbar{position:sticky;top:0;z-index:15;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.topinner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px clamp(18px,2.5vw,36px);max-width:var(--maxw);margin-inline:auto}
 .search{display:flex;align-items:center;gap:9px;background:var(--input);border:1px solid var(--line);border-radius:12px;padding:9px 14px;width:clamp(180px,26vw,340px);color:var(--faint)}
 .searchin{background:transparent;border:0;outline:0;color:var(--ink);font-family:${F.b};font-size:13px;width:100%}
 .tbr{display:flex;align-items:center;gap:clamp(10px,1.2vw,16px)}
@@ -323,7 +324,7 @@ function Style(){return <style>{`
 .profile{text-align:right}
 .pname{font-family:${F.d};font-size:13px;font-weight:600}.prole{font-size:11px;color:var(--muted)}
 .avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--teal),var(--violet));display:grid;place-items:center;font-family:${F.d};font-weight:700;font-size:13px;color:#04140D;flex-shrink:0}
-.content{padding:clamp(18px,2vw,30px) clamp(18px,2.5vw,36px) 70px;display:flex;flex-direction:column;gap:clamp(16px,1.6vw,24px);width:100%;max-width:2000px}
+.content{padding:clamp(18px,2vw,30px) clamp(18px,2.5vw,36px) 70px;display:flex;flex-direction:column;gap:clamp(16px,1.6vw,24px);width:100%;max-width:var(--maxw);margin-inline:auto}
 .card{background:var(--card);border:1px solid var(--cardb);border-radius:16px;padding:clamp(18px,1.5vw,24px);backdrop-filter:blur(7px)}
 .ctitle{font-family:${F.d};font-weight:600;font-size:16px;margin-bottom:16px;color:var(--ink)}
 .lbl,.kl,.el,.pl,.jkl,.fl{font-family:${F.d};font-size:12px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);font-weight:500}
