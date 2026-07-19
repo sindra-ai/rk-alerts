@@ -235,7 +235,7 @@ function EquityCard({acct,ts}){
     <div className="flex flex-col gap-1.5 md:gap-2">
       <div className="flex justify-between items-center">
         <span className={"text-xs font-figtree "+MUT}>Max Drawdown Allocation</span>
-        <span className={"text-xs font-semibold font-figtree "+LOSS}>{ts.decided?`${money(ts.netPnl)} net P&L`:"—"}</span>
+        <span className={"text-xs font-semibold font-figtree "+(ts.netPnl>=0?WIN:LOSS)}>{ts.decided?`${money(ts.netPnl)} net P&L`:"—"}</span>
       </div>
       <div className="h-2 bg-black/5 dark:bg-gray-900/70 rounded-[100px] overflow-hidden"><div className="h-full bg-amber-400 dark:bg-amber-500" style={{width:ts.decided?`${Math.min(100,Math.max(6,Math.abs(ts.netPnl)/50))}%`:"0%"}}/></div>
     </div>
