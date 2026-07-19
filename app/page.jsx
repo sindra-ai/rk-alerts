@@ -23,6 +23,7 @@ const Ico = {
   down:(p)=><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M2 5l4 4 3-3 5 5M10 11h4V7"/></svg>,
   pct:(p)=><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M13 3L3 13"/><circle cx="5" cy="5" r="1.6"/><circle cx="11" cy="11" r="1.6"/></svg>,
   act:(p)=><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M2 8h3l2 5 3-10 2 5h2"/></svg>,
+  trash:(p)=><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" {...p}><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.6 9a1 1 0 0 0 1 1h4.8a1 1 0 0 0 1-1L12 4M6.5 7v4M9.5 7v4"/></svg>,
 };
 
 function Logo({dark,className}){
@@ -47,6 +48,7 @@ const api = {
   journal:()=>fetch("/api/journal",{cache:"no-store"}).then(r=>r.json()).then(d=>d.trades||[]),
   jadd:(e)=>fetch("/api/journal",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)}),
   jpatch:(id,patch)=>fetch("/api/journal",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,patch})}),
+  jdel:(id)=>fetch("/api/journal",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}),
   accounts:()=>fetch("/api/topstep",{cache:"no-store"}).then(r=>r.json()).catch(()=>({configured:false,accounts:[]})),
   trades:(id)=>fetch(`/api/topstep?accountId=${id}&days=90`,{cache:"no-store"}).then(r=>r.json()).catch(()=>({trades:[]})),
 };
@@ -356,6 +358,7 @@ function Journal({trades,stats,reload,query}){
     if(q){const hay=`${t.pair||""} ${m} ${t.direction||""} ${SESS_FULL[t.session]||t.session||""} ${t.outcome||""}`.toLowerCase();if(!hay.includes(q))return false;}
     if(filter==="All"||filter==="All Trades")return true;if(filter==="Wins")return t.outcome==="win";if(filter==="Losses")return t.outcome==="loss";if(filter==="BE")return t.outcome==="be";return m===filter;});
   const setOutcome=async(t,o)=>{let r=t.rResult;if(o==="win"&&(r==null||r===""))r=t.rr||2;if(o==="loss")r=-1;if(o==="be")r=0;await api.jpatch(t.id,{outcome:o,rResult:r,taken:true});reload();};
+  const delTrade=async(t)=>{if(!window.confirm(`Delete this ${t.pair||"trade"} ${t.direction||""} trade? This can't be undone.`))return;await api.jdel(t.id);reload();};
   const submit=async()=>{await api.jadd({...form,source:form.model==="Manual"?"manual":"tool",taken:form.outcome!=="open",entry:num(form.entry),sl:num(form.sl),tp:num(form.tp),rr:num(form.rr),rResult:num(form.rResult),tradedAt:new Date().toISOString().slice(0,10)});setForm(emptyForm);setAdding(false);reload();};
   return (<>
     <div className="flex justify-between items-end gap-3 md:pb-2">
@@ -385,19 +388,19 @@ function Journal({trades,stats,reload,query}){
         {["Date w-28","Direction w-24","Pair w-20","Model w-28","Session w-28","Entry w-28 tr","Stop w-28 tr","Target w-28 tr","R Result w-24 tr","Status flex-1 tc"].map(h=>{const[t,w,al]=h.split(" ");return <div key={h} className={`${w} ${al==="tr"?"text-right":al==="tc"?"text-center":""} text-xs font-semibold font-outfit uppercase ${MUT}`}>{t}</div>;})}
       </div>
       <div className="flex flex-col gap-0.5 pt-2">
-        {filtered.length===0?<div className={"text-sm font-figtree py-6 text-center "+FAINT}>No trades logged yet</div>:filtered.map((t,i)=><JRowDesk key={t.id} t={t} i={i} setOutcome={setOutcome}/>)}
+        {filtered.length===0?<div className={"text-sm font-figtree py-6 text-center "+FAINT}>No trades logged yet</div>:filtered.map((t,i)=><JRowDesk key={t.id} t={t} i={i} setOutcome={setOutcome} del={delTrade}/>)}
       </div>
     </div>
     {/* mobile cards */}
     <div className="md:hidden flex flex-col gap-2.5">
-      {filtered.length===0?<div className={"text-sm font-figtree py-6 text-center "+FAINT}>No trades logged yet</div>:filtered.map(t=><JCardMob key={t.id} t={t} setOutcome={setOutcome}/>)}
+      {filtered.length===0?<div className={"text-sm font-figtree py-6 text-center "+FAINT}>No trades logged yet</div>:filtered.map(t=><JCardMob key={t.id} t={t} setOutcome={setOutcome} del={delTrade}/>)}
     </div>
     <button onClick={()=>setAdding(a=>!a)} className="fixed bottom-24 md:bottom-10 right-5 md:right-10 size-12 md:size-14 rounded-[30px] bg-gradient-to-br from-amber-500 to-amber-600 text-white grid place-items-center shadow-[0px_10px_20px_0px_rgba(245,166,35,0.33)] z-40 text-2xl">{adding?"×":"+"}</button>
     {adding&&<AddModal form={form} setForm={setForm} submit={submit} close={()=>setAdding(false)}/>}
   </>);
 }
 function JK({l,v,amber,tone,cls}){const c=tone==="win"?WIN:tone==="loss"?LOSS:amber?"text-amber-500":HEAD;return <div className={"flex flex-col gap-0.5 md:gap-1 "+(cls||"flex")}><span className={"text-[10px] md:text-xs font-normal font-figtree "+FAINT+" md:"+MUT}>{l}</span><span className={"text-base md:text-2xl font-bold font-outfit "+c}>{v}</span></div>;}
-function JRowDesk({t,i,setOutcome}){
+function JRowDesk({t,i,setOutcome,del}){
   const oc=t.outcome;const dc=t.direction==="SHORT"?LOSS:WIN;const ocC=oc==="win"?WIN:oc==="loss"?LOSS:FAINT;
   return (<div className={"px-4 py-3.5 rounded-lg flex items-center "+(i%2?"bg-black/5 dark:bg-white/5":"")}>
     <div className={"w-28 text-xs font-figtree "+MUT}>{t.tradedAt||""}</div>
@@ -409,15 +412,15 @@ function JRowDesk({t,i,setOutcome}){
     <div className={"w-28 text-right text-xs font-figtree "+LOSS}>{t.sl??"—"}</div>
     <div className={"w-28 text-right text-xs font-figtree "+WIN}>{t.tp??"—"}</div>
     <div className={"w-24 text-right text-xs font-bold font-figtree "+ocC}>{oc==="win"?`+${t.rResult??""}R`:oc==="loss"?`${t.rResult??-1}R`:oc==="be"?"0.0R":"—"}</div>
-    <div className="flex-1 flex justify-center">{oc==="open"?<span className="flex gap-1">{["win","loss","be"].map(o=><button key={o} onClick={()=>setOutcome(t,o)} className="text-[10px] w-6 h-6 rounded bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-amber-500">{o==="win"?"W":o==="loss"?"L":"BE"}</button>)}</span>:<span className={"text-xs font-semibold font-outfit "+ocC}>{oc==="win"?"W":oc==="loss"?"L":"BE"}</span>}</div>
+    <div className="flex-1 flex justify-center items-center gap-2">{oc==="open"?<span className="flex gap-1">{["win","loss","be"].map(o=><button key={o} onClick={()=>setOutcome(t,o)} className="text-[10px] w-6 h-6 rounded bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-amber-500">{o==="win"?"W":o==="loss"?"L":"BE"}</button>)}</span>:<span className={"text-xs font-semibold font-outfit "+ocC}>{oc==="win"?"W":oc==="loss"?"L":"BE"}</span>}<button onClick={()=>del(t)} title="Delete trade" className="w-6 h-6 grid place-items-center rounded text-zinc-400 hover:text-red-600 dark:hover:text-rose-500 hover:bg-black/5 dark:hover:bg-white/5"><Ico.trash width="14" height="14"/></button></div>
   </div>);
 }
-function JCardMob({t,setOutcome}){
+function JCardMob({t,setOutcome,del}){
   const dc=t.direction==="SHORT"?LOSS:WIN;const oc=t.outcome;const ocC=oc==="win"?WIN:oc==="loss"?LOSS:FAINT;
   return (<div className={"p-3 flex flex-col gap-2.5 "+CARD2}>
     <div className="flex justify-between items-center">
       <div className="flex items-center gap-1.5"><span className={"text-base font-bold font-outfit "+HEAD}>{(t.pair||"").replace("1!","")}</span><span className="px-1.5 py-0.5 rounded-sm text-[10px] font-semibold font-outfit bg-amber-500/10 text-amber-500">{t.model||"Manual"}</span></div>
-      <span className={"text-xs font-figtree "+FAINT}>{t.tradedAt||""}</span>
+      <div className="flex items-center gap-2"><span className={"text-xs font-figtree "+FAINT}>{t.tradedAt||""}</span><button onClick={()=>del(t)} title="Delete" className="w-6 h-6 grid place-items-center rounded text-zinc-400 hover:text-rose-500 bg-black/5 dark:bg-white/5"><Ico.trash width="13" height="13"/></button></div>
     </div>
     <div className="flex justify-between items-center">
       <span className="flex items-center gap-1"><span className={"size-1.5 rounded-[100px] "+(t.direction==="SHORT"?"bg-red-600 dark:bg-rose-500":"bg-green-700 dark:bg-emerald-500")}/><span className={"text-xs font-semibold font-outfit "+dc}>{t.direction}</span></span>
@@ -482,7 +485,7 @@ function analyzeTs(trades,acct){
   const closed=trades.filter(t=>t.pnl!=null&&!t.voided);
   const sm={};SESSIONS.forEach(s=>sm[s]={session:s,pnl:0,n:0});
   let wins=0,losses=0,winSum=0,lossSum=0,net=0;const dm={};const sorted=[...closed].sort((a,b)=>new Date(a.time||a.exitedAt||a.enteredAt)-new Date(b.time||b.exitedAt||b.enteredAt));const eq=[];let run=0;
-  for(const t of sorted){const p=Number(t.pnl)-(Number(t.fees)||0);net+=p;run+=p;eq.push(run);if(p>0){wins++;winSum+=p;}else if(p<0){losses++;lossSum+=p;}const se=sessOf(t.time||t.exitedAt||t.enteredAt);if(se&&sm[se]){sm[se].pnl+=p;sm[se].n++;}const day=(t.time||t.exitedAt||t.enteredAt||"").slice(0,10);if(day)dm[day]=(dm[day]||0)+p;}
+  for(const t of sorted){const p=Number(t.pnl);net+=p;run+=p;eq.push(run);if(p>0){wins++;winSum+=p;}else if(p<0){losses++;lossSum+=p;}const se=sessOf(t.time||t.exitedAt||t.enteredAt);if(se&&sm[se]){sm[se].pnl+=p;sm[se].n++;}const day=(t.time||t.exitedAt||t.enteredAt||"").slice(0,10);if(day)dm[day]=(dm[day]||0)+p;}
   const decided=wins+losses;
   const cal=[];const today=new Date();for(let i=55;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);cal.push({date:k,pnl:dm[k]??null});}
   const avgWin=wins?winSum/wins:null;const avgLoss=losses?lossSum/losses:null;
