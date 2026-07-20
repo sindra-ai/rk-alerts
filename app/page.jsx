@@ -421,9 +421,9 @@ function JCardMob({t,setOutcome,del}){
   const onStart=e=>{start.current=e.touches[0].clientX;setDrag(true);};
   const onMove=e=>{const d=e.touches[0].clientX-start.current;setDx(Math.max(Math.min(d,0),-96));};
   const onEnd=()=>{setDrag(false);setDx(dx<=-56?-84:0);};
-  return (<div className="relative overflow-hidden rounded-2xl">
+  return (<div className="relative overflow-hidden rounded-2xl bg-rose-500">
     <button onClick={()=>del(t)} title="Delete" className="absolute right-0 top-0 bottom-0 w-[84px] bg-rose-500 text-white flex flex-col items-center justify-center gap-1"><Ico.trash width="18" height="18"/><span className="text-[10px] font-semibold font-outfit">Delete</span></button>
-    <div onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} style={{transform:`translateX(${dx}px)`,transition:drag?"none":"transform .18s ease"}} className={"relative p-3 flex flex-col gap-2.5 "+CARD2}>
+    <div onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} style={{transform:`translateX(${dx}px)`,transition:drag?"none":"transform .18s ease"}} className="relative z-10 p-3 flex flex-col gap-2.5 rounded-2xl bg-white dark:bg-gray-900 outline outline-1 outline-offset-[-1px] outline-gray-200 dark:outline-white/5">
     <div className="flex justify-between items-center">
       <div className="flex items-center gap-1.5"><span className={"text-base font-bold font-outfit "+HEAD}>{(t.pair||"").replace("1!","")}</span><span className="px-1.5 py-0.5 rounded-sm text-[10px] font-semibold font-outfit bg-amber-500/10 text-amber-500">{t.model||"Manual"}</span></div>
       <div className="flex items-center gap-2"><span className={"text-xs font-figtree "+FAINT}>{t.tradedAt||""}</span><button onClick={()=>del(t)} title="Delete" className="w-6 h-6 grid place-items-center rounded text-zinc-400 hover:text-rose-500 bg-black/5 dark:bg-white/5"><Ico.trash width="13" height="13"/></button></div>
