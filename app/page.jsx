@@ -70,7 +70,7 @@ export default function Page(){
   useEffect(()=>{loadJ();},[]);
   useEffect(()=>{(async()=>{const a=await api.accounts();setAccts(a);if(a.accounts&&a.accounts.length)setAcct(a.accounts[0]);})();},[]);
   useEffect(()=>{if(!acct)return;api.trades(acct.id).then(r=>setTsTrades(r.trades||[]));},[acct]);
-  useEffect(()=>{let al=true;const poll=async()=>{try{const d=await fetch("/api/state",{cache:"no-store"}).then(r=>r.json());if(!al)return;setLive(d.latest||null);if(d.latest&&d.latest.id!==lastId.current){if(lastId.current!==null&&"Notification"in window&&Notification.permission==="granted")new Notification(`RK ${d.latest.grade||"A"}★ ${d.latest.direction||""} ${d.latest.strongPair||d.latest.symbol||""}`,{body:d.latest.session||""});lastId.current=d.latest.id;}}catch{}};poll();const t=setInterval(poll,4000);return()=>{al=false;clearInterval(t);};},[]);
+  useEffect(()=>{let al=true;const poll=async()=>{try{const d=await fetch("/api/state",{cache:"no-store"}).then(r=>r.json());if(!al)return;setLive(d.latest||null);if(d.latest&&d.latest.id!==lastId.current){if(lastId.current!==null&&"Notification"in window&&Notification.permission==="granted")new Notification(`RK ${d.latest.grade||"A"}★ ${d.latest.direction||""} ${d.latest.symbol||d.latest.strongPair||""}`,{body:d.latest.session||""});lastId.current=d.latest.id;}}catch{}};poll();const t=setInterval(poll,4000);return()=>{al=false;clearInterval(t);};},[]);
 
   const ts=useMemo(()=>analyzeTs(tsTrades,acct),[tsTrades,acct]);
   const jstats=useMemo(()=>analyzeJournal(journal),[journal]);
@@ -251,7 +251,7 @@ function LiveSignal({live}){
     </div>
     {live?(<>
       <div className="flex flex-col gap-1 md:gap-1.5">
-        <span className={"text-2xl md:text-3xl font-extrabold font-outfit "+HEAD}>{live.direction||"WATCHING"} {live.strongPair||live.symbol||""}</span>
+        <span className={"text-2xl md:text-3xl font-extrabold font-outfit "+HEAD}>{live.direction||"WATCHING"} {live.symbol||live.strongPair||""}</span>
         <span className={"text-xs md:text-sm font-figtree leading-5 "+MUT}>{live.sweptLevel?`Swept ${live.sweptLevel} — bullish displacement on setup`:"Monitoring for a setup."}</span>
       </div>
       {live.entry!=null&&(<div className="flex flex-col gap-2 md:gap-3">
