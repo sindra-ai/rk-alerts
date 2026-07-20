@@ -348,18 +348,18 @@ function Equity({series}){
 }
 
 /* ============ JOURNAL ============ */
-const emptyForm={model:"Phase 4",pair:"NQ1!",direction:"LONG",session:"NY_AM",entry:"",sl:"",tp:"",rr:2,outcome:"open",rResult:""};
+const emptyForm={pair:"NQ1!",direction:"LONG",session:"NY_AM",entry:"",sl:"",tp:"",rr:2,outcome:"open",rResult:""};
 function Journal({trades,stats,reload,query}){
   const [filter,setFilter]=useState("All");const [period,setPeriod]=useState("Daily");const [adding,setAdding]=useState(false);const [form,setForm]=useState(emptyForm);
-  const filts=["All Trades","Manual","Phase 4","Phase 3","Phase 2","Wins","Losses","BE"];
-  const mfilts=["All Trades","Wins","Losses","Phase 4"];
+  const filts=["All Trades","Wins","Losses","Breakeven"];
+  const mfilts=["All Trades","Wins","Losses","Breakeven"];
   const q=(query||"").trim().toLowerCase();
-  const filtered=trades.filter(t=>{const m=t.model||(t.source==="manual"?"Manual":"—");
+  const filtered=trades.filter(t=>{
     if(q){const hay=`${t.pair||""} ${m} ${t.direction||""} ${SESS_FULL[t.session]||t.session||""} ${t.outcome||""}`.toLowerCase();if(!hay.includes(q))return false;}
-    if(filter==="All"||filter==="All Trades")return true;if(filter==="Wins")return t.outcome==="win";if(filter==="Losses")return t.outcome==="loss";if(filter==="BE")return t.outcome==="be";return m===filter;});
+    if(filter==="All"||filter==="All Trades")return true;if(filter==="Wins")return t.outcome==="win";if(filter==="Losses")return t.outcome==="loss";if(filter==="Breakeven"||filter==="BE")return t.outcome==="be";return true;});
   const setOutcome=async(t,o)=>{let r=t.rResult;if(o==="win"&&(r==null||r===""))r=t.rr||2;if(o==="loss")r=-1;if(o==="be")r=0;await api.jpatch(t.id,{outcome:o,rResult:r,taken:true});reload();};
   const delTrade=async(t)=>{if(!window.confirm(`Delete this ${t.pair||"trade"} ${t.direction||""} trade? This can't be undone.`))return;await api.jdel(t.id);reload();};
-  const submit=async()=>{await api.jadd({...form,source:form.model==="Manual"?"manual":"tool",taken:form.outcome!=="open",entry:num(form.entry),sl:num(form.sl),tp:num(form.tp),rr:num(form.rr),rResult:num(form.rResult),tradedAt:new Date().toISOString().slice(0,10)});setForm(emptyForm);setAdding(false);reload();};
+  const submit=async()=>{await api.jadd({...form,source:"manual",taken:form.outcome!=="open",entry:num(form.entry),sl:num(form.sl),tp:num(form.tp),rr:num(form.rr),rResult:num(form.rResult),tradedAt:new Date().toISOString().slice(0,10)});setForm(emptyForm);setAdding(false);reload();};
   return (<>
     <div className="flex justify-between items-end gap-3 md:pb-2">
       <span className={"text-2xl md:text-3xl font-bold font-outfit "+HEAD}>Trade Journal</span>
@@ -385,7 +385,7 @@ function Journal({trades,stats,reload,query}){
     {/* desktop table */}
     <div className={"hidden md:block p-6 "+CARD2+" md:rounded-3xl md:outline-black/10 md:dark:outline-white/5"}>
       <div className="px-4 py-3 bg-black/5 dark:bg-white/5 rounded-xl flex items-center">
-        {["Date w-28","Direction w-24","Pair w-20","Model w-28","Session w-28","Entry w-28 tr","Stop w-28 tr","Target w-28 tr","R Result w-24 tr","Status flex-1 tc"].map(h=>{const[t,w,al]=h.split(" ");return <div key={h} className={`${w} ${al==="tr"?"text-right":al==="tc"?"text-center":""} text-xs font-semibold font-outfit uppercase ${MUT}`}>{t}</div>;})}
+        {["Date w-28","Direction w-24","Pair w-20","Session w-28","Entry w-28 tr","Stop w-28 tr","Target w-28 tr","R Result w-24 tr","Status flex-1 tc"].map(h=>{const[t,w,al]=h.split(" ");return <div key={h} className={`${w} ${al==="tr"?"text-right":al==="tc"?"text-center":""} text-xs font-semibold font-outfit uppercase ${MUT}`}>{t}</div>;})}
       </div>
       <div className="flex flex-col gap-0.5 pt-2">
         {filtered.length===0?<div className={"text-sm font-figtree py-6 text-center "+FAINT}>No trades logged yet</div>:filtered.map((t,i)=><JRowDesk key={t.id} t={t} i={i} setOutcome={setOutcome} del={delTrade}/>)}
@@ -406,7 +406,6 @@ function JRowDesk({t,i,setOutcome,del}){
     <div className={"w-28 text-xs font-figtree "+MUT}>{t.tradedAt||""}</div>
     <div className="w-24"><span className={"px-2.5 py-1 rounded-[100px] text-xs font-bold font-outfit outline outline-1 outline-offset-[-1px] "+(t.direction==="SHORT"?"bg-red-600/10 dark:bg-rose-500/10 outline-red-600/20 dark:outline-rose-500/25 "+LOSS:"bg-green-700/10 dark:bg-emerald-500/10 outline-green-700/20 dark:outline-emerald-500/25 "+WIN)}>{t.direction}</span></div>
     <div className={"w-20 text-sm font-semibold font-outfit "+HEAD}>{(t.pair||"").replace("1!","")}</div>
-    <div className="w-28"><span className="px-2.5 py-1 rounded-md text-xs font-bold font-outfit bg-amber-500/10 outline outline-1 outline-offset-[-1px] outline-amber-500 dark:outline-amber-500 text-amber-500">{t.model||"Manual"}</span></div>
     <div className="w-28"><span className={"px-2.5 py-1 rounded-[100px] text-xs font-figtree bg-black/5 dark:bg-white/5 "+MUT}>{SESS_FULL[t.session]||t.session}</span></div>
     <div className={"w-28 text-right text-xs font-figtree "+MUT}>{t.entry??"—"}</div>
     <div className={"w-28 text-right text-xs font-figtree "+LOSS}>{t.sl??"—"}</div>
@@ -425,7 +424,7 @@ function JCardMob({t,setOutcome,del}){
     <button onClick={()=>del(t)} title="Delete" className="absolute right-0 top-0 bottom-0 w-[84px] bg-rose-500 text-white flex flex-col items-center justify-center gap-1"><Ico.trash width="18" height="18"/><span className="text-[10px] font-semibold font-outfit">Delete</span></button>
     <div onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} style={{transform:`translateX(${dx}px)`,transition:drag?"none":"transform .18s ease"}} className="relative z-10 p-3 flex flex-col gap-2.5 rounded-2xl bg-white dark:bg-gray-900 outline outline-1 outline-offset-[-1px] outline-gray-200 dark:outline-white/5">
     <div className="flex justify-between items-center">
-      <div className="flex items-center gap-1.5"><span className={"text-base font-bold font-outfit "+HEAD}>{(t.pair||"").replace("1!","")}</span><span className="px-1.5 py-0.5 rounded-sm text-[10px] font-semibold font-outfit bg-amber-500/10 text-amber-500">{t.model||"Manual"}</span></div>
+      <div className="flex items-center gap-1.5"><span className={"text-base font-bold font-outfit "+HEAD}>{(t.pair||"").replace("1!","")}</span></div>
       <div className="flex items-center gap-2"><span className={"text-xs font-figtree "+FAINT}>{t.tradedAt||""}</span><button onClick={()=>del(t)} title="Delete" className="w-6 h-6 grid place-items-center rounded text-zinc-400 hover:text-rose-500 bg-black/5 dark:bg-white/5"><Ico.trash width="13" height="13"/></button></div>
     </div>
     <div className="flex justify-between items-center">
@@ -448,7 +447,6 @@ function AddModal({form,setForm,submit,close}){
     <div onClick={e=>e.stopPropagation()} className="w-full max-w-[520px] p-5 md:p-8 bg-white dark:bg-gray-900 rounded-3xl shadow-[0px_16px_32px_0px_rgba(0,0,0,0.12)] dark:shadow-[0px_16px_32px_0px_rgba(0,0,0,0.4)] outline outline-1 outline-transparent dark:outline-white/5 flex flex-col gap-5 md:gap-6 max-h-[90vh] overflow-auto">
       <div className="flex justify-between items-center"><span className={"text-xl font-bold font-outfit "+HEAD}>Add New Trade</span><button onClick={close} className="p-2 rounded-[100px] bg-black/0 dark:bg-white/5 text-zinc-600 dark:text-white text-lg leading-none">×</button></div>
       <div className="flex flex-col gap-4 md:gap-5">
-        <label className="flex flex-col gap-1.5"><span className={lab}>Model</span><select className={inp} value={form.model} onChange={set("model")}>{MODELS.map(m=><option key={m}>{m}</option>)}</select></label>
         <div className="flex flex-col gap-1.5"><span className={lab}>Direction</span>
           <div className="p-1 bg-black/0 dark:bg-white/5 rounded-[10px] flex gap-1">
             {["LONG","SHORT"].map(d=><button key={d} onClick={()=>setForm({...form,direction:d})} className={"flex-1 py-2.5 rounded-lg text-xs font-semibold font-outfit "+(form.direction===d?(d==="LONG"?"bg-green-700 dark:bg-emerald-500/20 text-white dark:text-emerald-500 dark:outline dark:outline-1 dark:outline-emerald-500/25":"bg-red-600 dark:bg-rose-500/20 text-white dark:text-rose-500"):"text-zinc-600 dark:text-slate-400 font-medium")}>{d}</button>)}
