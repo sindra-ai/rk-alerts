@@ -101,7 +101,7 @@ function TopBar({dark,toggle,view,setView,accts,acct,setAcct,query,setQuery}){
     {/* DESKTOP */}
     <div className="hidden md:flex sticky top-0 z-30 self-stretch px-8 py-4 bg-white/40 dark:bg-neutral-900/60 border-b border-white/20 dark:border-amber-500/20 backdrop-blur-lg justify-between items-center">
       <div className="flex items-center gap-5">
-        <Logo dark={dark} className="h-9 w-auto"/>
+        <Logo dark={dark} className="h-11 w-auto"/>
         <div className="px-4 py-2 bg-black/5 dark:bg-white/10 rounded-[100px] outline outline-1 outline-transparent dark:outline-white/10 flex items-center gap-2">
           <Ico.search width="14" height="14" className="text-zinc-600 dark:text-zinc-400"/>
           <input value={query} onChange={e=>onSearch(e.target.value)} placeholder="Search setups..." className="bg-transparent outline-none text-xs font-figtree text-gray-900 dark:text-white placeholder:text-zinc-400 w-40"/>
@@ -142,7 +142,7 @@ function TopBar({dark,toggle,view,setView,accts,acct,setAcct,query,setQuery}){
     {/* MOBILE top */}
     <div className="md:hidden sticky top-0 z-30 flex flex-col">
       <div className="px-5 py-3 flex justify-between items-center backdrop-blur-lg bg-white/30 dark:bg-neutral-900/50 border-b border-white/10 dark:border-amber-500/15">
-        <Logo dark={dark} className="h-6 w-auto"/>
+        <Logo dark={dark} className="h-8 w-auto"/>
         <div className="flex items-center gap-2.5">
           <button onClick={toggle} className="p-1.5 bg-black/5 dark:bg-white/5 rounded-[100px] grid place-items-center text-gray-900 dark:text-white" aria-label="theme">
             {dark?<Ico.moon width="16" height="16"/>:<Ico.sun width="16" height="16"/>}
