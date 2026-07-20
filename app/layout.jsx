@@ -5,6 +5,10 @@ export const metadata = {
   description: "Live RK A\u2605 futures setup monitor & trade journal",
 };
 
+export const viewport = {
+  themeColor: "#0F0F14",
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
@@ -16,6 +20,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body>{children}</body>
     </html>
