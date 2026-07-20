@@ -3,4 +3,6 @@
 @tailwind utilities;
 
 html, body { margin: 0; padding: 0; }
+html { background: #0F0F14; }
+html.light-base, html:has(.light) { background: #F7F5F2; }
 * { font-family: 'Figtree', system-ui, sans-serif; }
