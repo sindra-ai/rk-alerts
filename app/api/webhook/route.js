@@ -5,6 +5,19 @@ import { sendEmail } from "../../../lib/email";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const STEP_KEYS = ["sweep", "pdaTap", "extSMT", "intSMT", "entryModel", "target"];
+
+// A signal is only "live-worthy" if it's a genuine complete A* setup:
+// all 6 steps true, grade A, a direction, and a numeric entry.
+function isCompleteAstar(b) {
+  if (!b || typeof b !== "object") return false;
+  if ((b.grade || "").toUpperCase() !== "A") return false;
+  if (!b.direction) return false;
+  if (b.entry == null || isNaN(Number(b.entry))) return false;
+  const steps = b.steps || {};
+  return STEP_KEYS.every((k) => steps[k] === true);
+}
+
 // TradingView cannot send custom auth headers, so the shared secret rides in
 // the URL: .../api/webhook?token=YOUR_TOKEN  (keep that URL private).
 export async function POST(req) {
@@ -26,9 +39,16 @@ export async function POST(req) {
     }
   }
 
+  // Gate: only complete A* setups become the live signal. Anything partial /
+  // malformed is acknowledged but NOT shown on the dashboard (prevents phantom
+  // setups from a premature or misconfigured alert).
+  if (!isCompleteAstar(body)) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "not a complete A* setup" });
+  }
+
   const sig = {
     ...body,
-    grade: body.grade || "A",
+    grade: "A",
     id: Date.now(),
     receivedAt: new Date().toISOString(),
   };
