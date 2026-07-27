@@ -203,11 +203,11 @@ export default function Page() {
       <div className="relative min-h-screen w-full overflow-x-hidden font-figtree text-[#0D111E] dark:text-white">
         <Ambient />
         <div className="relative z-10 mx-auto w-full max-w-[1180px] px-4 pb-16 pt-6 sm:px-6 md:pt-8">
-          <Header dark={dark} toggleTheme={toggleTheme} />
+          <Header dark={dark} />
 
           <div className="mt-6 grid grid-cols-1 gap-4 md:gap-5 lg:grid-cols-[1.55fr_1fr]">
             <SetupCard live={live} risk={risk} />
-            <RiskCard acct={acct} mll={mll} risk={risk} setRisk={setRiskPersist} live={live} />
+            <RiskCard mll={mll} risk={risk} setRisk={setRiskPersist} dark={dark} toggleTheme={toggleTheme} />
           </div>
 
           <Feed history={history} />
@@ -243,29 +243,10 @@ function Ambient() {
 }
 
 /* ---------------- header: bare logo + theme toggle ---------------- */
-function Header({ dark, toggleTheme }) {
+function Header({ dark }) {
   return (
-    <header className="relative flex items-center justify-center py-1">
+    <header className="flex items-center justify-center py-1">
       <Logo dark={dark} className="h-12 w-auto sm:h-[60px]" />
-      <button
-        onClick={toggleTheme}
-        aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-        className={
-          GLASS +
-          " absolute right-0 grid h-9 w-9 place-items-center rounded-full transition hover:bg-white/70 dark:hover:bg-white/[0.10]"
-        }
-      >
-        {dark ? (
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-white/70">
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-black/55">
-            <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
-          </svg>
-        )}
-      </button>
     </header>
   );
 }
@@ -531,16 +512,44 @@ function Empty() {
 }
 
 /* ---------------- risk ---------------- */
-function RiskCard({ acct, mll, risk, setRisk, live }) {
+function RiskCard({ mll, risk, setRisk, dark, toggleTheme }) {
   const survives = risk ? Math.floor(mll / risk) : 0;
   const pct = Math.min(100, (risk / mll) * 100);
   const hot = survives < 4;
 
+  /* The inverse of the sizing panel, and the number that's actually
+     useful BEFORE a signal arrives: how wide a stop this budget buys
+     on one contract of each instrument. */
+  const stops = [
+    ["MNQ", 2],
+    ["NQ", 20],
+    ["MES", 5],
+    ["ES", 50],
+  ].map(([k, pt]) => [k, risk / pt]);
+
   return (
     <section className={GLASS + " flex flex-col overflow-hidden rounded-[28px] p-5 sm:p-6"}>
       <Spec />
-      <div className="text-[10px] uppercase tracking-[0.18em] text-black/35 dark:text-white/35">
-        Risk per trade
+      <div className="flex items-start justify-between">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-black/35 dark:text-white/35">
+          Risk per trade
+        </div>
+        <button
+          onClick={toggleTheme}
+          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          className="-mr-1 -mt-1 grid h-8 w-8 flex-shrink-0 place-items-center rounded-full border border-black/[0.07] bg-black/[0.02] text-black/50 transition hover:bg-black/[0.05] dark:border-white/[0.09] dark:bg-white/[0.05] dark:text-white/60 dark:hover:bg-white/[0.10]"
+        >
+          {dark ? (
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+            </svg>
+          )}
+        </button>
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
@@ -600,28 +609,30 @@ function RiskCard({ acct, mll, risk, setRisk, live }) {
         )}
       </div>
 
-      <div className="mt-auto space-y-2 pt-5">
-        <Line k="Balance" v={acct && acct.balance != null ? money(acct.balance) : "\u2014"} />
-        <Line k="Loss limit" v={money(mll)} />
-        <Line k="Flat by" v="21:10 UK" hint={live ? "setup live" : undefined} />
+      <div className="mt-5">
+        <div className="mb-2.5 text-[10px] uppercase tracking-[0.18em] text-black/35 dark:text-white/35">
+          Widest stop &middot; 1 contract
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {stops.map(([k, pts]) => (
+            <div
+              key={k}
+              className="flex items-baseline justify-between rounded-[14px] border border-black/[0.07] bg-black/[0.02] px-3 py-2.5 dark:border-white/[0.08] dark:bg-white/[0.035]"
+            >
+              <span className="font-outfit text-[11px] font-semibold text-black/50 dark:text-white/50">
+                {k}
+              </span>
+              <span className="font-outfit text-[15px] font-extrabold tabular-nums">
+                {pts >= 10 ? Math.round(pts) : pts.toFixed(1)}
+                <span className="ml-0.5 text-[10px] font-medium text-black/35 dark:text-white/35">
+                  pts
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
-  );
-}
-
-function Line({ k, v, hint }) {
-  return (
-    <div className="flex items-center justify-between border-t border-black/[0.06] pt-2 first:border-0 first:pt-0 dark:border-white/[0.06]">
-      <span className="text-[11px] text-black/35 dark:text-white/35">{k}</span>
-      <span className="flex items-center gap-2 font-outfit text-[12px] font-medium tabular-nums text-black/75 dark:text-white/80">
-        {hint && (
-          <span className="rounded-full bg-[#F2A922]/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-[#C77A0F] dark:text-[#F2A922]">
-            {hint}
-          </span>
-        )}
-        {v}
-      </span>
-    </div>
   );
 }
 
@@ -692,10 +703,6 @@ function Feed({ history }) {
           );
         })}
       </div>
-
-      <p className="mb-4 text-[11px] text-black/35 dark:text-white/28">
-        {hhmm(active.start)}&ndash;{hhmm(active.end)} UK &middot; {active.draws}
-      </p>
 
       {rows.length === 0 ? (
         <p className="py-8 text-center text-[13px] text-black/35 dark:text-white/30">
