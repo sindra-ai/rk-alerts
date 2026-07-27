@@ -34,22 +34,36 @@ function isValidEma(b) {
 // TradingView cannot send custom auth headers, so the shared secret rides in
 // the URL: .../api/webhook?token=YOUR_TOKEN  (keep that URL private).
 export async function POST(req) {
+  try {
+    return await handle(req);
+  } catch (e) {
+    // Never 500 at TradingView — it retries and floods the log.
+    console.error("[webhook]", e);
+    return NextResponse.json({ ok: false, error: e.message }, { status: 200 });
+  }
+}
+
+async function handle(req) {
   const token = req.nextUrl.searchParams.get("token");
   if (process.env.WEBHOOK_TOKEN && token !== process.env.WEBHOOK_TOKEN) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  // TradingView sends JSON when the alert message is valid JSON; otherwise text.
+  // Read the body ONCE. Calling req.json() first consumes the stream, so a
+  // following req.text() throws "Body has already been read" — which is an
+  // unhandled exception, i.e. a 500 on every plain-text alert.
+  let raw = "";
+  try {
+    raw = await req.text();
+  } catch {
+    raw = "";
+  }
+
   let body;
   try {
-    body = await req.json();
+    body = JSON.parse(raw);
   } catch {
-    const text = await req.text();
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = { raw: text };
-    }
+    body = { raw };
   }
 
   // Gate: a complete A* setup, or a well-formed EMA crossover. Anything
