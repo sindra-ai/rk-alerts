@@ -198,7 +198,7 @@ function Dashboard({ts,jstats,live,acct}){
     </div>
     <div className="flex flex-col lg:flex-row items-stretch gap-5 md:gap-6">
       <EquityCard acct={acct} ts={ts}/>
-      <LiveSignal live={live}/>
+      <LiveSignal live={live} acct={acct}/>
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-5">
       <Kpi label="Average Win" mlabel="Avg Win" value={ts.avgWin!=null?"+"+money(ts.avgWin):"—"} icon="up" tone="win"/>
@@ -242,27 +242,101 @@ function EquityCard({acct,ts}){
   </div>);
 }
 
-function LiveSignal({live}){
+/* ---- contract specs for position sizing ---- */
+const CONTRACTS = {
+  MNQ:{pt:2,label:"MNQ"}, NQ:{pt:20,label:"NQ"},
+  MES:{pt:5,label:"MES"}, ES:{pt:50,label:"ES"},
+};
+function specOf(symbol=""){
+  const s=symbol.toUpperCase();
+  if(s.includes("MNQ"))return CONTRACTS.MNQ;
+  if(s.includes("MES"))return CONTRACTS.MES;
+  if(s.includes("NQ"))return CONTRACTS.NQ;
+  if(s.includes("ES"))return CONTRACTS.ES;
+  return null;
+}
+
+function LiveSignal({live,acct}){
   const done=live?STEP_KEYS.filter(k=>live.steps?.[k]).length:0;const pct=Math.round((done/6)*100);
+  const isAstar=!live?.strategy||live.strategy==="astar";
+  const hasPlan=live&&live.entry!=null&&live.sl!=null&&live.tp!=null;
+  const entry=Number(live?.entry),sl=Number(live?.sl),tp=Number(live?.tp);
+  const isLong=(live?.direction||"").toUpperCase()==="LONG";
+  const riskPts=hasPlan?Math.abs(entry-sl):0;
+  const rewardPts=hasPlan?Math.abs(tp-entry):0;
+  const be=isLong?entry+riskPts:entry-riskPts;
+
+  const mll=acct?.maxLossLimit??2000;
+  const budget=Math.round(mll*0.1);
+  const spec=specOf(live?.symbol||live?.strongPair||"");
+  const perContract=spec&&riskPts?riskPts*spec.pt:null;
+  const size=perContract?Math.floor(budget/perContract):null;
+  const survives=budget?Math.floor(mll/budget):null;
+
+  const hi=isLong?tp:sl, lo=isLong?sl:tp;
+  const posOf=(v)=>((hi-v)/(hi-lo))*100;
+
   return (<div className={"flex-1 p-4 md:p-7 flex flex-col gap-3 md:gap-6 bg-white/70 dark:bg-gray-900/75 rounded-2xl md:rounded-3xl outline outline-1 outline-offset-[-1px] outline-black/10 dark:outline-amber-500/20 backdrop-blur-xl shadow-[0px_8px_24px_0px_rgba(11,12,16,0.06)] dark:shadow-[0px_8px_24px_0px_rgba(245,166,35,0.07)]"}>
     <div className="flex justify-between items-center">
-      <span className="px-2 md:px-3 py-1 md:py-1.5 bg-green-700/10 dark:bg-emerald-500/10 rounded-[100px] outline outline-1 outline-offset-[-1px] outline-green-700/20 dark:outline-emerald-500/20 text-[10px] md:text-xs font-semibold font-outfit uppercase text-green-700 dark:text-emerald-500">Active Setup</span>
+      <div className="flex items-center gap-2">
+        <span className="px-2 md:px-3 py-1 md:py-1.5 bg-green-700/10 dark:bg-emerald-500/10 rounded-[100px] outline outline-1 outline-offset-[-1px] outline-green-700/20 dark:outline-emerald-500/20 text-[10px] md:text-xs font-semibold font-outfit uppercase text-green-700 dark:text-emerald-500">Active Setup</span>
+        {live&&!isAstar&&<span className="px-2 py-1 bg-amber-500/10 rounded-[100px] outline outline-1 outline-offset-[-1px] outline-amber-500/20 text-[10px] font-semibold font-outfit uppercase text-amber-500">EMA 9/21</span>}
+      </div>
       <span className="text-amber-500 text-xs md:text-base font-bold font-figtree">{live?.receivedAt?new Date(live.receivedAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"—"}</span>
     </div>
     {live?(<>
       <div className="flex flex-col gap-1 md:gap-1.5">
         <span className={"text-2xl md:text-3xl font-extrabold font-outfit "+HEAD}>{live.direction||"WATCHING"} {live.symbol||live.strongPair||""}</span>
-        <span className={"text-xs md:text-sm font-figtree leading-5 "+MUT}>{live.sweptLevel?`Swept ${live.sweptLevel} — bullish displacement on setup`:"Monitoring for a setup."}</span>
+        <span className={"text-xs md:text-sm font-figtree leading-5 "+MUT}>{isAstar?(live.sweptLevel?`Swept ${live.sweptLevel} — bullish displacement on setup`:"Monitoring for a setup."):`Crossover confirmed${live.tf?` on ${live.tf}`:""} — enter at the open.`}</span>
       </div>
-      {live.entry!=null&&(<div className="flex flex-col gap-2 md:gap-3">
-        <div className="flex gap-2 md:gap-3"><Tile l="Entry Level" v={live.entry}/><Tile l="Stop Loss" v={live.sl} c={LOSS}/></div>
-        <div className="flex gap-2 md:gap-3"><Tile l="Target" v={live.tp} c={WIN}/><Tile l="Risk:Reward" v={live.rr?`${live.rr} : 1`:"—"} c="text-amber-500"/></div>
+
+      {hasPlan&&(<div className="flex gap-4 md:gap-5">
+        <div className="relative w-[3px] rounded-full bg-black/10 dark:bg-white/10 min-h-[168px] md:min-h-[184px] flex-shrink-0">
+          <div className="absolute -left-px -right-px rounded-full bg-amber-500/70" style={{top:`${Math.min(posOf(entry),posOf(be))}%`,height:`${Math.abs(posOf(be)-posOf(entry))}%`}}/>
+        </div>
+        <div className="relative flex-1 min-h-[168px] md:min-h-[184px]">
+          <Rung top={posOf(isLong?tp:sl)} label={isLong?"Target":"Stop"} value={isLong?tp:sl} tone={isLong?WIN:LOSS}/>
+          <Rung top={posOf(be)} label="Breakeven" value={be} tone="text-amber-500" dashed note="+1R"/>
+          <Rung top={posOf(entry)} label="Entry" value={entry} tone={HEAD} strong/>
+          <Rung top={posOf(isLong?sl:tp)} label={isLong?"Stop":"Target"} value={isLong?sl:tp} tone={isLong?LOSS:WIN}/>
+        </div>
       </div>)}
-      <div className="flex flex-col gap-1.5 md:gap-2">
+
+      {hasPlan&&(<div className="flex flex-col gap-2 md:gap-3">
+        <div className="flex gap-2 md:gap-3">
+          <Tile l="Risk" v={`${riskPts.toFixed(2)} pts`}/>
+          <Tile l="Reward" v={`${rewardPts.toFixed(2)} pts`} c={WIN}/>
+          <Tile l="Risk:Reward" v={live.rr?`${live.rr} : 1`:"—"} c="text-amber-500"/>
+        </div>
+        {spec&&perContract&&(<div className={"p-3 md:p-4 rounded-xl md:rounded-2xl flex flex-col gap-2 "+(size>=1?"bg-black/0 dark:bg-gray-900/70 outline outline-1 outline-offset-[-1px] outline-black/5 dark:outline-white/5":"bg-red-500/5 outline outline-1 outline-offset-[-1px] outline-red-500/30")}>
+          <div className="flex justify-between items-baseline">
+            <span className={"text-[10px] md:text-xs font-figtree uppercase tracking-wider "+FAINT}>Max size · ${budget} risk</span>
+            <span className={"text-[10px] md:text-xs font-figtree "+MUT}>${perContract.toFixed(0)} per contract</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className={"text-2xl md:text-3xl font-extrabold font-outfit "+(size>=1?HEAD:LOSS)}>{size}</span>
+            <span className={"text-xs md:text-sm font-figtree "+MUT}>{spec.label}{size===1?"":"s"}</span>
+            {size<1&&<span className={"ml-auto text-[10px] md:text-xs font-figtree text-right "+LOSS}>Stop too wide — use micros</span>}
+          </div>
+          {size>=1&&<span className={"text-[10px] md:text-xs font-figtree "+FAINT}>Survives {survives} losses before the ${mll.toLocaleString()} limit</span>}
+        </div>)}
+      </div>)}
+
+      {isAstar&&(<div className="flex flex-col gap-1.5 md:gap-2">
         <div className="flex gap-1">{STEP_KEYS.map(k=><div key={k} className={"flex-1 h-1 md:h-1.5 rounded-[100px] "+(live.steps?.[k]?"bg-amber-500":"bg-black/10 dark:bg-white/10")}/>)}</div>
         <span className={"text-[10px] md:text-xs font-figtree "+FAINT}>Progress to profit target ({pct}%)</span>
-      </div>
+      </div>)}
     </>):(<div className="flex flex-col gap-1.5 py-4"><span className={"text-2xl md:text-3xl font-extrabold font-outfit "+FAINT}>No signal</span><span className={"text-sm font-figtree "+MUT}>Waiting on the TradingView feed.</span></div>)}
+  </div>);
+}
+
+function Rung({top,label,value,tone,dashed,strong,note}){
+  const line=tone==="text-amber-500"?"border-amber-500":tone===WIN?"border-green-700 dark:border-emerald-500":tone===LOSS?"border-red-600 dark:border-rose-500":"border-gray-900 dark:border-white";
+  return (<div className="absolute left-0 right-0 flex items-center gap-2 -translate-y-1/2" style={{top:`${top}%`}}>
+    <div className={"w-2 border-t "+(dashed?"border-dashed ":"")+line}/>
+    <span className={"font-outfit tabular-nums "+(strong?"text-base md:text-lg font-extrabold ":"text-sm md:text-base font-semibold ")+tone}>{Number(value).toLocaleString(undefined,{minimumFractionDigits:2})}</span>
+    <span className={"text-[9px] md:text-[10px] font-figtree uppercase tracking-[0.14em] "+FAINT}>{label}</span>
+    {note&&<span className="ml-auto text-[9px] md:text-[10px] font-figtree text-amber-500">{note}</span>}
   </div>);
 }
 function Tile({l,v,c}){return <div className="flex-1 p-2 md:p-3 rounded-lg md:rounded-xl bg-black/0 dark:bg-gray-900/70 outline outline-1 outline-offset-[-1px] outline-black/5 dark:outline-white/5 flex flex-col gap-0.5 md:gap-1"><span className={"text-[10px] md:text-xs font-figtree "+FAINT}>{l}</span><span className={"text-xs md:text-sm font-bold md:font-semibold font-outfit md:font-figtree "+(c||HEAD)}>{v}</span></div>;}
