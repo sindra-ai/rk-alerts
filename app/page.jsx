@@ -129,7 +129,7 @@ export default function Page() {
     <div className="relative min-h-screen w-full overflow-x-hidden font-figtree text-white">
       <Ambient />
       <div className="relative z-10 mx-auto w-full max-w-[1180px] px-4 pb-16 pt-4 sm:px-6 md:pt-6">
-        <TopBar accts={accts} acct={acct} setAcct={setAcct} />
+        <Header />
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:mt-6 md:gap-5 lg:grid-cols-[1.55fr_1fr]">
           <SetupCard live={live} risk={risk} />
@@ -166,61 +166,12 @@ function Ambient() {
   );
 }
 
-function TopBar({ accts, acct, setAcct }) {
-  const [open, setOpen] = useState(false);
-  const [now, setNow] = useState("");
-  useEffect(() => {
-    const tick = () =>
-      setNow(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
-    tick();
-    const t = setInterval(tick, 15000);
-    return () => clearInterval(t);
-  }, []);
-
+function Header() {
   return (
-    <div className={GLASS + " flex items-center gap-3 rounded-[22px] px-3 py-2.5 sm:px-4"}>
+    <header className={GLASS + " flex items-center justify-center rounded-[22px] px-4 py-4 sm:py-5"}>
       <Spec radius="rounded-t-[22px]" />
-      <Logo className="h-7 w-auto sm:h-8" />
-      <div className="ml-auto flex items-center gap-2">
-        <div className="relative">
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="flex max-w-[190px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-left transition hover:bg-white/[0.11]"
-          >
-            <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#F2A922]" />
-            <span className="truncate font-outfit text-[11px] font-semibold sm:text-xs">
-              {acct ? acct.name : accts.configured ? "No account" : "Not linked"}
-            </span>
-          </button>
-          {open && accts.accounts && accts.accounts.length > 0 && (
-            <div className={GLASS + " absolute right-0 z-20 mt-2 w-60 overflow-hidden rounded-[18px] p-1"}>
-              <Spec radius="rounded-t-[18px]" />
-              {accts.accounts.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => {
-                    setAcct(a);
-                    setOpen(false);
-                  }}
-                  className={
-                    "flex w-full items-center justify-between rounded-[13px] px-3 py-2.5 text-left transition hover:bg-white/[0.08] " +
-                    (acct && acct.id === a.id ? "bg-white/[0.07]" : "")
-                  }
-                >
-                  <span className="truncate font-outfit text-xs font-medium">{a.name}</span>
-                  <span className="ml-2 font-outfit text-[11px] tabular-nums text-white/50">
-                    {a.balance != null ? money(a.balance) : "\u2014"}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <span className="hidden rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 font-outfit text-[11px] tabular-nums text-white/55 sm:block">
-          {now}
-        </span>
-      </div>
-    </div>
+      <Logo className="h-10 w-auto sm:h-[52px]" />
+    </header>
   );
 }
 
