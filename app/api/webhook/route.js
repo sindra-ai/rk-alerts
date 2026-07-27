@@ -18,6 +18,19 @@ function isCompleteAstar(b) {
   return STEP_KEYS.every((k) => steps[k] === true);
 }
 
+// EMA 9/21 crossover: no steps, no grade — it needs a complete trade
+// plan and geometry pointing the right way. A long with the stop above
+// entry means the Pine snippet is miscalculating, and it should be
+// rejected rather than drawn as a nonsense card.
+function isValidEma(b) {
+  if (!b || b.strategy !== "ema") return false;
+  const { direction, entry, sl, tp } = b;
+  if (!direction || entry == null || sl == null || tp == null) return false;
+  const e = Number(entry), s = Number(sl), t = Number(tp);
+  if ([e, s, t].some(isNaN)) return false;
+  return direction.toUpperCase() === "LONG" ? s < e && t > e : s > e && t < e;
+}
+
 // TradingView cannot send custom auth headers, so the shared secret rides in
 // the URL: .../api/webhook?token=YOUR_TOKEN  (keep that URL private).
 export async function POST(req) {
@@ -39,24 +52,46 @@ export async function POST(req) {
     }
   }
 
-  // Gate: only complete A* setups become the live signal. Anything partial /
-  // malformed is acknowledged but NOT shown on the dashboard (prevents phantom
-  // setups from a premature or misconfigured alert).
-  if (!isCompleteAstar(body)) {
-    return NextResponse.json({ ok: true, ignored: true, reason: "not a complete A* setup" });
+  // Gate: a complete A* setup, or a well-formed EMA crossover. Anything
+  // partial or malformed is acknowledged but NOT shown on the dashboard
+  // (prevents phantom setups from a premature or misconfigured alert).
+  const astar = isCompleteAstar(body);
+  const ema = isValidEma(body);
+
+  if (!astar && !ema) {
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      reason:
+        body?.strategy === "ema"
+          ? "EMA signal missing entry/sl/tp, or stop and target are inverted"
+          : "not a complete A* setup",
+    });
   }
+
+  const rr =
+    body.rr ??
+    (ema
+      ? +(Math.abs(Number(body.tp) - Number(body.entry)) /
+          Math.abs(Number(body.entry) - Number(body.sl))).toFixed(1)
+      : undefined);
 
   const sig = {
     ...body,
-    grade: "A",
+    strategy: ema ? "ema" : "astar",
+    grade: ema ? body.grade || "—" : "A",
+    ...(rr != null ? { rr } : {}),
     id: Date.now(),
     receivedAt: new Date().toISOString(),
   };
 
   await saveSignal(sig);
-  await sendEmail(sig);
 
-  return NextResponse.json({ ok: true, id: sig.id });
+  // Email stays on A* only — EMA fires far more often and would flood
+  // the inbox. Drop the condition if you want both.
+  if (astar) await sendEmail(sig);
+
+  return NextResponse.json({ ok: true, id: sig.id, strategy: sig.strategy });
 }
 
 // Handy for a quick browser check that the endpoint is alive.
