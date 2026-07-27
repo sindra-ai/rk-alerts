@@ -2,30 +2,29 @@
 import { useEffect, useRef, useState } from "react";
 
 /* ==================================================================
- * rkfx.trade — Liquid Glass rebuild
+ * rkfx.trade — Liquid Glass
  *
- * Kept:  the live setup, the risk buffer, the signal feed.
- * Cut:   equity curve, win/loss calendar, session P&L, strategy panel.
- *        All of it duplicates Compass / TradeSea.
- *
- * The glass needs something to refract, so the background is a fixed
- * mesh of amber and indigo blooms over near-black. Every panel is the
- * same material at the same blur — depth comes from layering and the
- * specular top edge, not from stacked drop shadows.
+ * Light and dark are both first-class. Everything below uses Tailwind
+ * dark: variants against the .dark class on the root, which matches
+ * darkMode:"class" in tailwind.config.js.
  * ================================================================== */
 
 const STEP_KEYS = ["sweep", "pdaTap", "extSMT", "intSMT", "entryModel", "target"];
 
+/* One material, two tunings. Depth comes from the specular top edge
+   and the blur, not from stacked shadows. */
 const GLASS =
-  "relative bg-white/[0.055] backdrop-blur-2xl backdrop-saturate-150 " +
-  "border border-white/[0.09] " +
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.13),0_20px_50px_-20px_rgba(0,0,0,0.85)]";
+  "relative backdrop-blur-2xl backdrop-saturate-150 border " +
+  "bg-white/55 border-black/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_18px_44px_-24px_rgba(15,20,35,0.30)] " +
+  "dark:bg-white/[0.055] dark:border-white/[0.09] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.13),0_20px_50px_-20px_rgba(0,0,0,0.85)]";
 
 function Spec({ radius = "rounded-t-[28px]" }) {
   return (
     <div
       aria-hidden
-      className={"pointer-events-none absolute inset-x-0 top-0 h-px " + radius}
+      className={
+        "pointer-events-none absolute inset-x-0 top-0 h-px opacity-70 dark:opacity-100 " + radius
+      }
       style={{
         background:
           "linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.45) 22%,rgba(255,255,255,0.18) 55%,transparent 88%)",
@@ -34,6 +33,7 @@ function Spec({ radius = "rounded-t-[28px]" }) {
   );
 }
 
+/* ---- contracts ---- */
 const CONTRACTS = {
   MNQ: { pt: 2, label: "MNQ" },
   NQ: { pt: 20, label: "NQ" },
@@ -55,6 +55,68 @@ function mllOf(name = "") {
   return 2000;
 }
 
+/* ---- killzones, UK time. Gaps between them are deliberate. ---- */
+const SESSIONS = [
+  { key: "ASIA", label: "Asia", start: 0, end: 6, draws: "Source of liquidity for London" },
+  { key: "LONDON", label: "London", start: 7, end: 10, draws: "Draws on the previous Asia high/low" },
+  { key: "NY_AM", label: "NY AM", start: 13.5, end: 17, draws: "Draws on the previous London high/low" },
+  { key: "NY_PM", label: "NY PM", start: 18, end: 21.5, draws: "Draws on the previous NY AM high/low" },
+];
+
+function ukHours(d = new Date()) {
+  const p = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  return (
+    Number(p.find((x) => x.type === "hour").value) +
+    Number(p.find((x) => x.type === "minute").value) / 60
+  );
+}
+
+function activeSession(now = new Date()) {
+  const h = ukHours(now);
+  for (const s of SESSIONS) if (h >= s.start && h < s.end) return { s, live: true };
+  let best = SESSIONS[0];
+  let gap = 99;
+  for (const s of SESSIONS) {
+    let g = h - s.end;
+    if (g < 0) g += 24;
+    if (g < gap) {
+      gap = g;
+      best = s;
+    }
+  }
+  return { s: best, live: false };
+}
+
+function nextSession(now = new Date()) {
+  const h = ukHours(now);
+  let best = SESSIONS[0];
+  let gap = 99;
+  for (const s of SESSIONS) {
+    let g = s.start - h;
+    if (g <= 0) g += 24;
+    if (g < gap) {
+      gap = g;
+      best = s;
+    }
+  }
+  return best;
+}
+
+function sessionStart(s, now = new Date()) {
+  const h = ukHours(now);
+  const d = new Date(now);
+  d.setSeconds(0, 0);
+  const back = s.start <= h ? h - s.start : 24 - s.start + h;
+  return d.getTime() - back * 3600 * 1000;
+}
+
+const hhmm = (v) =>
+  String(Math.floor(v)).padStart(2, "0") + ":" + String(Math.round((v % 1) * 60)).padStart(2, "0");
 const fmt = (n, d = 2) =>
   Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const money = (n) =>
@@ -63,19 +125,31 @@ const money = (n) =>
 /* ================================================================= */
 
 export default function Page() {
+  const [dark, setDark] = useState(true);
   const [live, setLive] = useState(null);
   const [history, setHistory] = useState([]);
-  const [accts, setAccts] = useState({ configured: false, accounts: [] });
   const [acct, setAcct] = useState(null);
   const [risk, setRisk] = useState(200);
   const lastId = useRef(null);
 
   useEffect(() => {
     try {
+      const t = localStorage.getItem("rk-theme");
+      if (t) setDark(t === "dark");
       const r = localStorage.getItem("rk-risk");
       if (r) setRisk(Number(r));
     } catch {}
   }, []);
+
+  const toggleTheme = () =>
+    setDark((d) => {
+      const n = !d;
+      try {
+        localStorage.setItem("rk-theme", n ? "dark" : "light");
+      } catch {}
+      return n;
+    });
+
   const setRiskPersist = (v) => {
     setRisk(v);
     try {
@@ -87,8 +161,7 @@ export default function Page() {
     (async () => {
       const a = await fetch("/api/topstep", { cache: "no-store" })
         .then((r) => r.json())
-        .catch(() => ({ configured: false, accounts: [] }));
-      setAccts(a);
+        .catch(() => ({ accounts: [] }));
       if (a.accounts && a.accounts.length) setAcct(a.accounts[0]);
     })();
   }, []);
@@ -126,37 +199,40 @@ export default function Page() {
   const mll = acct ? mllOf(acct.name) : 2000;
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden font-figtree text-white">
-      <Ambient />
-      <div className="relative z-10 mx-auto w-full max-w-[1180px] px-4 pb-16 pt-4 sm:px-6 md:pt-6">
-        <Header />
+    <div className={dark ? "dark" : ""}>
+      <div className="relative min-h-screen w-full overflow-x-hidden font-figtree text-[#0D111E] dark:text-white">
+        <Ambient />
+        <div className="relative z-10 mx-auto w-full max-w-[1180px] px-4 pb-16 pt-6 sm:px-6 md:pt-8">
+          <Header dark={dark} toggleTheme={toggleTheme} />
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:mt-6 md:gap-5 lg:grid-cols-[1.55fr_1fr]">
-          <SetupCard live={live} risk={risk} />
-          <RiskCard acct={acct} mll={mll} risk={risk} setRisk={setRiskPersist} live={live} />
+          <div className="mt-6 grid grid-cols-1 gap-4 md:gap-5 lg:grid-cols-[1.55fr_1fr]">
+            <SetupCard live={live} risk={risk} />
+            <RiskCard acct={acct} mll={mll} risk={risk} setRisk={setRiskPersist} live={live} />
+          </div>
+
+          <Feed history={history} />
         </div>
-
-        <Feed history={history} />
       </div>
     </div>
   );
 }
 
+/* ---------------- background ---------------- */
 function Ambient() {
   return (
     <div aria-hidden className="fixed inset-0 z-0">
-      <div className="absolute inset-0 bg-[#07070A]" />
+      <div className="absolute inset-0 bg-[#EFEEF1] dark:bg-[#07070A]" />
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 opacity-70 dark:opacity-100"
         style={{
           background:
-            "radial-gradient(720px 520px at 88% -6%, rgba(242,169,34,0.20), transparent 62%)," +
-            "radial-gradient(680px 560px at -8% 104%, rgba(76,58,180,0.20), transparent 60%)," +
-            "radial-gradient(520px 420px at 42% 48%, rgba(16,185,129,0.07), transparent 65%)",
+            "radial-gradient(720px 520px at 88% -6%, rgba(242,169,34,0.22), transparent 62%)," +
+            "radial-gradient(680px 560px at -8% 104%, rgba(76,58,180,0.16), transparent 60%)," +
+            "radial-gradient(520px 420px at 42% 48%, rgba(16,185,129,0.08), transparent 65%)",
         }}
       />
       <div
-        className="absolute inset-0 opacity-[0.15] mix-blend-overlay"
+        className="absolute inset-0 opacity-[0.10] mix-blend-overlay dark:opacity-[0.15]"
         style={{
           backgroundImage:
             "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")",
@@ -166,29 +242,51 @@ function Ambient() {
   );
 }
 
-function Header() {
+/* ---------------- header: bare logo + theme toggle ---------------- */
+function Header({ dark, toggleTheme }) {
   return (
-    <header className={GLASS + " flex items-center justify-center rounded-[22px] px-4 py-4 sm:py-5"}>
-      <Spec radius="rounded-t-[22px]" />
-      <Logo className="h-10 w-auto sm:h-[52px]" />
+    <header className="relative flex items-center justify-center py-1">
+      <Logo dark={dark} className="h-12 w-auto sm:h-[60px]" />
+      <button
+        onClick={toggleTheme}
+        aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+        className={
+          GLASS +
+          " absolute right-0 grid h-9 w-9 place-items-center rounded-full transition hover:bg-white/70 dark:hover:bg-white/[0.10]"
+        }
+      >
+        {dark ? (
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-white/70">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-black/55">
+            <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+          </svg>
+        )}
+      </button>
     </header>
   );
 }
 
-function Logo({ className }) {
+function Logo({ dark, className }) {
   const [err, setErr] = useState(false);
+  const src = dark ? "/logo-white.png" : "/logo-black.png";
   if (!err)
     return (
       <img
-        src="/logo-white.png"
+        key={src}
+        src={src}
         className={className + " object-contain"}
         alt="RKFX"
         onError={() => setErr(true)}
       />
     );
-  return <span className="font-outfit text-base font-extrabold tracking-[0.2em]">RKFX</span>;
+  return <span className="font-outfit text-xl font-extrabold tracking-[0.22em]">RKFX</span>;
 }
 
+/* ---------------- setup ---------------- */
 function SetupCard({ live, risk }) {
   const isEma = live && live.strategy === "ema";
   const hasPlan = live && live.entry != null && live.sl != null && live.tp != null;
@@ -229,24 +327,29 @@ function SetupCard({ live, risk }) {
               <h1 className="font-outfit text-[30px] font-extrabold leading-none tracking-tight sm:text-[38px]">
                 {live.symbol || live.strongPair || "\u2014"}
               </h1>
-              <p className="mt-2 text-[13px] leading-relaxed text-white/45">
+              <p className="mt-2 text-[13px] leading-relaxed text-black/45 dark:text-white/45">
                 {isEma
-                  ? "Crossover confirmed" + (live.tf ? " on " + live.tf : "") + " \u2014 enter at the open."
+                  ? "Crossover confirmed" +
+                    (live.tf ? " on " + live.tf : "") +
+                    " \u2014 enter at the open."
                   : live.sweptLevel
                   ? "Swept " + live.sweptLevel + " \u2014 displacement on setup."
                   : "Monitoring for a setup."}
               </p>
             </div>
             <div className="flex-shrink-0 text-right">
-              <div className="font-outfit text-sm font-semibold tabular-nums text-[#F2A922]">
+              <div className="font-outfit text-sm font-semibold tabular-nums text-[#C77A0F] dark:text-[#F2A922]">
                 {live.receivedAt
                   ? new Date(live.receivedAt).toLocaleTimeString("en-GB", {
                       hour: "2-digit",
                       minute: "2-digit",
+                      timeZone: "Europe/London",
                     })
                   : "\u2014"}
               </div>
-              <div className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-white/30">fired</div>
+              <div className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-black/30 dark:text-white/30">
+                fired
+              </div>
             </div>
           </div>
 
@@ -270,27 +373,35 @@ function SetupCard({ live, risk }) {
                   className={
                     "mt-2 flex items-center gap-4 rounded-[20px] border px-4 py-3.5 " +
                     (size >= 1
-                      ? "border-white/10 bg-white/[0.04]"
+                      ? "border-black/[0.07] bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.04]"
                       : "border-[#F0435C]/30 bg-[#F0435C]/[0.07]")
                   }
                 >
                   <div>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-white/35">Max size</div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-black/35 dark:text-white/35">
+                      Max size
+                    </div>
                     <div className="mt-1 flex items-baseline gap-1.5">
                       <span
-                        className="font-outfit text-[26px] font-extrabold leading-none tabular-nums"
-                        style={{ color: size >= 1 ? "#fff" : "#F0435C" }}
+                        className={
+                          "font-outfit text-[26px] font-extrabold leading-none tabular-nums " +
+                          (size >= 1 ? "" : "text-[#F0435C]")
+                        }
                       >
                         {size}
                       </span>
-                      <span className="font-outfit text-xs text-white/45">{spec.label}</span>
+                      <span className="font-outfit text-xs text-black/45 dark:text-white/45">
+                        {spec.label}
+                      </span>
                     </div>
                   </div>
                   <div className="ml-auto text-right">
                     <div className="font-outfit text-sm font-semibold tabular-nums">
                       {money(perContract)}
                     </div>
-                    <div className="mt-0.5 text-[10px] text-white/35">per contract</div>
+                    <div className="mt-0.5 text-[10px] text-black/35 dark:text-white/35">
+                      per contract
+                    </div>
                   </div>
                   {size < 1 && (
                     <div className="max-w-[104px] text-right text-[10px] leading-snug text-[#F0435C]">
@@ -310,12 +421,14 @@ function SetupCard({ live, risk }) {
                     key={k}
                     className={
                       "h-1 flex-1 rounded-full transition " +
-                      (live.steps && live.steps[k] ? "bg-[#F2A922]" : "bg-white/10")
+                      (live.steps && live.steps[k]
+                        ? "bg-[#E28D13] dark:bg-[#F2A922]"
+                        : "bg-black/10 dark:bg-white/10")
                     }
                   />
                 ))}
               </div>
-              <div className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/30">
+              <div className="mt-2 text-[10px] uppercase tracking-[0.16em] text-black/30 dark:text-white/30">
                 {STEP_KEYS.filter((k) => live.steps && live.steps[k]).length} of 6 confirmed
               </div>
             </div>
@@ -334,8 +447,8 @@ function Ladder({ posOf, entry, be, sl, tp, isLong, tone }) {
       v: isLong ? tp : sl,
       c: isLong ? "#10B981" : "#F0435C",
     },
-    { p: posOf(be), label: "Breakeven", v: be, c: "#F2A922", dashed: true, note: "+1R" },
-    { p: posOf(entry), label: "Entry", v: entry, c: "#FFFFFF", strong: true },
+    { p: posOf(be), label: "Breakeven", v: be, c: "#E28D13", dashed: true, note: "+1R" },
+    { p: posOf(entry), label: "Entry", v: entry, strong: true },
     {
       p: posOf(isLong ? sl : tp),
       label: isLong ? "Stop" : "Target",
@@ -348,7 +461,7 @@ function Ladder({ posOf, entry, be, sl, tp, isLong, tone }) {
 
   return (
     <div className="mt-6 flex gap-4">
-      <div className="relative w-[3px] flex-shrink-0 rounded-full bg-white/10">
+      <div className="relative w-[3px] flex-shrink-0 rounded-full bg-black/10 dark:bg-white/10">
         <div
           className="absolute -left-px -right-px rounded-full"
           style={{
@@ -367,10 +480,10 @@ function Ladder({ posOf, entry, be, sl, tp, isLong, tone }) {
             style={{ top: r.p + "%" }}
           >
             <div
-              className="w-2.5 flex-shrink-0"
+              className={"w-2.5 flex-shrink-0 " + (r.strong ? "border-current" : "")}
               style={{
-                borderTop: "1px " + (r.dashed ? "dashed" : "solid") + " " + r.c,
-                opacity: r.strong ? 0.9 : 0.7,
+                borderTop: "1px " + (r.dashed ? "dashed" : "solid") + " " + (r.c || "currentColor"),
+                opacity: r.strong ? 0.85 : 0.7,
               }}
             />
             <span
@@ -380,13 +493,17 @@ function Ladder({ posOf, entry, be, sl, tp, isLong, tone }) {
                   ? "text-[19px] font-extrabold sm:text-[21px]"
                   : "text-[15px] font-semibold sm:text-base")
               }
-              style={{ color: r.c }}
+              style={r.c ? { color: r.c } : undefined}
             >
               {fmt(r.v)}
             </span>
-            <span className="text-[9.5px] uppercase tracking-[0.18em] text-white/30">{r.label}</span>
+            <span className="text-[9.5px] uppercase tracking-[0.18em] text-black/35 dark:text-white/30">
+              {r.label}
+            </span>
             {r.note && (
-              <span className="ml-auto text-[9.5px] tracking-[0.1em] text-[#F2A922]/80">{r.note}</span>
+              <span className="ml-auto text-[9.5px] tracking-[0.1em] text-[#C77A0F] dark:text-[#F2A922]/80">
+                {r.note}
+              </span>
             )}
           </div>
         ))}
@@ -399,18 +516,21 @@ function Empty() {
   return (
     <div className="flex min-h-[300px] flex-col items-center justify-center py-10 text-center">
       <div className="relative mb-5 h-11 w-11">
-        <span className="absolute inset-0 rounded-full border border-white/[0.12]" />
+        <span className="absolute inset-0 rounded-full border border-black/10 dark:border-white/[0.12]" />
         <span className="absolute inset-0 animate-ping rounded-full border border-[#F2A922]/25 [animation-duration:3.2s]" />
-        <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#F2A922]/60" />
+        <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#E28D13]/70 dark:bg-[#F2A922]/60" />
       </div>
-      <h2 className="font-outfit text-2xl font-extrabold tracking-tight text-white/85">Standing by</h2>
-      <p className="mt-1.5 max-w-[240px] text-[13px] leading-relaxed text-white/35">
+      <h2 className="font-outfit text-2xl font-extrabold tracking-tight text-black/80 dark:text-white/85">
+        Standing by
+      </h2>
+      <p className="mt-1.5 max-w-[240px] text-[13px] leading-relaxed text-black/40 dark:text-white/35">
         The next confirmed setup appears here with its levels and size.
       </p>
     </div>
   );
 }
 
+/* ---------------- risk ---------------- */
 function RiskCard({ acct, mll, risk, setRisk, live }) {
   const survives = risk ? Math.floor(mll / risk) : 0;
   const pct = Math.min(100, (risk / mll) * 100);
@@ -419,13 +539,15 @@ function RiskCard({ acct, mll, risk, setRisk, live }) {
   return (
     <section className={GLASS + " flex flex-col overflow-hidden rounded-[28px] p-5 sm:p-6"}>
       <Spec />
-      <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Risk per trade</div>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-black/35 dark:text-white/35">
+        Risk per trade
+      </div>
 
       <div className="mt-3 flex items-baseline gap-2">
         <span className="font-outfit text-[40px] font-extrabold leading-none tracking-tight tabular-nums">
           {money(risk)}
         </span>
-        <span className="text-xs text-white/35">of {money(mll)}</span>
+        <span className="text-xs text-black/35 dark:text-white/35">of {money(mll)}</span>
       </div>
 
       <input
@@ -435,11 +557,11 @@ function RiskCard({ acct, mll, risk, setRisk, live }) {
         step={25}
         value={risk}
         onChange={(e) => setRisk(Number(e.target.value))}
-        className="mt-4 w-full accent-[#F2A922]"
+        className="mt-4 w-full accent-[#E28D13] dark:accent-[#F2A922]"
         aria-label="Risk per trade"
       />
 
-      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-black/[0.07] dark:bg-white/[0.08]">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{
@@ -454,27 +576,31 @@ function RiskCard({ acct, mll, risk, setRisk, live }) {
       <div
         className={
           "mt-4 rounded-[18px] border px-4 py-3 " +
-          (hot ? "border-[#F0435C]/30 bg-[#F0435C]/[0.07]" : "border-white/10 bg-white/[0.04]")
+          (hot
+            ? "border-[#F0435C]/30 bg-[#F0435C]/[0.07]"
+            : "border-black/[0.07] bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.04]")
         }
       >
         <div className="flex items-baseline gap-2">
           <span
-            className="font-outfit text-2xl font-extrabold tabular-nums"
-            style={{ color: hot ? "#F0435C" : "#fff" }}
+            className={
+              "font-outfit text-2xl font-extrabold tabular-nums " + (hot ? "text-[#F0435C]" : "")
+            }
           >
             {survives}
           </span>
-          <span className="text-xs text-white/45">losing trades before the account is gone</span>
+          <span className="text-xs text-black/45 dark:text-white/45">
+            losing trades before the account is gone
+          </span>
         </div>
         {hot && (
-          <p className="mt-1.5 text-[11px] leading-snug text-[#F0435C]/85">
+          <p className="mt-1.5 text-[11px] leading-snug text-[#D32F2F] dark:text-[#F0435C]/85">
             Under four is fragile. A normal losing streak ends this account.
           </p>
         )}
       </div>
 
       <div className="mt-auto space-y-2 pt-5">
-        <Line k="Account" v={acct ? acct.name : "Not linked"} />
         <Line k="Balance" v={acct && acct.balance != null ? money(acct.balance) : "\u2014"} />
         <Line k="Loss limit" v={money(mll)} />
         <Line k="Flat by" v="21:10 UK" hint={live ? "setup live" : undefined} />
@@ -485,11 +611,11 @@ function RiskCard({ acct, mll, risk, setRisk, live }) {
 
 function Line({ k, v, hint }) {
   return (
-    <div className="flex items-center justify-between border-t border-white/[0.06] pt-2 first:border-0 first:pt-0">
-      <span className="text-[11px] text-white/35">{k}</span>
-      <span className="flex items-center gap-2 font-outfit text-[12px] font-medium tabular-nums text-white/80">
+    <div className="flex items-center justify-between border-t border-black/[0.06] pt-2 first:border-0 first:pt-0 dark:border-white/[0.06]">
+      <span className="text-[11px] text-black/35 dark:text-white/35">{k}</span>
+      <span className="flex items-center gap-2 font-outfit text-[12px] font-medium tabular-nums text-black/75 dark:text-white/80">
         {hint && (
-          <span className="rounded-full bg-[#F2A922]/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-[#F2A922]">
+          <span className="rounded-full bg-[#F2A922]/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-[#C77A0F] dark:text-[#F2A922]">
             {hint}
           </span>
         )}
@@ -499,21 +625,81 @@ function Line({ k, v, hint }) {
   );
 }
 
+/* ---------------- feed ---------------- */
 function Feed({ history }) {
-  const rows = (history || []).slice(0, 12);
+  const [now, setNow] = useState(() => new Date());
+  const [pick, setPick] = useState(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const { s: current, live } = activeSession(now);
+  const active = pick ? SESSIONS.find((s) => s.key === pick) || current : current;
+  const from = sessionStart(active, now);
+  const upcoming = nextSession(now);
+
+  const counts = {};
+  for (const s of SESSIONS) {
+    const f = sessionStart(s, now);
+    counts[s.key] = (history || []).filter((x) => {
+      const t = x.receivedAt ? Date.parse(x.receivedAt) : x.id;
+      return t >= f;
+    }).length;
+  }
+
+  const rows = (history || [])
+    .filter((s) => {
+      const t = s.receivedAt ? Date.parse(s.receivedAt) : s.id;
+      return t >= from;
+    })
+    .slice(0, 20);
+
   return (
     <section className={GLASS + " mt-4 overflow-hidden rounded-[28px] p-5 sm:p-6 md:mt-5"}>
       <Spec />
-      <div className="mb-4 flex items-baseline justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-outfit text-base font-bold tracking-tight">Signal feed</h2>
-        <span className="text-[10px] uppercase tracking-[0.16em] text-white/30">
-          every fire, taken or not
+        <span className="text-[10px] uppercase tracking-[0.16em] text-black/30 dark:text-white/30">
+          {live && active.key === current.key
+            ? "clears at " + hhmm(active.end) + " UK"
+            : upcoming.label + " opens " + hhmm(upcoming.start) + " UK"}
         </span>
       </div>
 
+      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-0.5">
+        {SESSIONS.map((s) => {
+          const on = s.key === active.key;
+          const isNow = s.key === current.key && live;
+          return (
+            <button
+              key={s.key}
+              onClick={() => setPick(s.key)}
+              className={
+                "flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 font-outfit text-[11px] font-semibold transition " +
+                (on
+                  ? "border-[#F2A922]/40 bg-[#F2A922]/15 text-[#C77A0F] dark:text-[#F2A922]"
+                  : "border-black/[0.07] bg-black/[0.02] text-black/45 hover:bg-black/[0.05] dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/45 dark:hover:bg-white/[0.07]")
+              }
+            >
+              {isNow && (
+                <span className="h-1.5 w-1.5 rounded-full bg-[#F2A922] shadow-[0_0_7px_#F2A922]" />
+              )}
+              {s.label}
+              <span className="tabular-nums opacity-60">{counts[s.key]}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mb-4 text-[11px] text-black/35 dark:text-white/28">
+        {hhmm(active.start)}&ndash;{hhmm(active.end)} UK &middot; {active.draws}
+      </p>
+
       {rows.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-white/30">
-          Nothing yet. Signals land here the moment TradingView fires.
+        <p className="py-8 text-center text-[13px] text-black/35 dark:text-white/30">
+          Nothing fired in {active.label}.
         </p>
       ) : (
         <div className="-mx-1">
@@ -527,7 +713,7 @@ function Feed({ history }) {
             return (
               <div
                 key={s.id || i}
-                className="flex items-center gap-3 rounded-[15px] px-3 py-2.5 transition hover:bg-white/[0.05]"
+                className="flex items-center gap-3 rounded-[15px] px-3 py-2.5 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
               >
                 <span
                   className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
@@ -542,20 +728,21 @@ function Feed({ history }) {
                 <span className="min-w-0 flex-1 truncate font-outfit text-[13px] font-semibold">
                   {s.symbol || s.strongPair || "\u2014"}
                 </span>
-                <span className="hidden font-outfit text-[11px] tabular-nums text-white/45 sm:block">
+                <span className="hidden font-outfit text-[11px] tabular-nums text-black/45 dark:text-white/45 sm:block">
                   {s.entry != null ? fmt(s.entry) : "\u2014"}
                 </span>
-                <span className="w-[52px] flex-shrink-0 text-right font-outfit text-[11px] tabular-nums text-white/45">
+                <span className="w-[52px] flex-shrink-0 text-right font-outfit text-[11px] tabular-nums text-black/45 dark:text-white/45">
                   {r ? r.toFixed(1) + "R" : "\u2014"}
                 </span>
-                <span className="w-[46px] flex-shrink-0 text-right text-[10px] uppercase tracking-wider text-white/25">
+                <span className="w-[46px] flex-shrink-0 text-right text-[10px] uppercase tracking-wider text-black/30 dark:text-white/25">
                   {s.strategy === "ema" ? "EMA" : "A\u2605"}
                 </span>
-                <span className="w-[42px] flex-shrink-0 text-right font-outfit text-[11px] tabular-nums text-white/30">
+                <span className="w-[42px] flex-shrink-0 text-right font-outfit text-[11px] tabular-nums text-black/30 dark:text-white/30">
                   {s.receivedAt
                     ? new Date(s.receivedAt).toLocaleTimeString("en-GB", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        timeZone: "Europe/London",
                       })
                     : ""}
                 </span>
@@ -568,6 +755,7 @@ function Feed({ history }) {
   );
 }
 
+/* ---------------- small pieces ---------------- */
 function Chip({ children, tone, solid, muted }) {
   if (solid)
     return (
@@ -583,8 +771,8 @@ function Chip({ children, tone, solid, muted }) {
       className={
         "rounded-full border px-2.5 py-1 font-outfit text-[10px] font-semibold uppercase tracking-[0.1em] " +
         (muted
-          ? "border-white/[0.08] bg-white/[0.03] text-white/40"
-          : "border-[#F2A922]/25 bg-[#F2A922]/10 text-[#F2A922]")
+          ? "border-black/[0.07] bg-black/[0.02] text-black/40 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/40"
+          : "border-[#F2A922]/30 bg-[#F2A922]/12 text-[#C77A0F] dark:text-[#F2A922]")
       }
     >
       {children}
@@ -594,16 +782,18 @@ function Chip({ children, tone, solid, muted }) {
 
 function Stat({ label, value, unit, tone }) {
   return (
-    <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.035] px-3 py-3">
-      <div className="text-[9.5px] uppercase tracking-[0.16em] text-white/30">{label}</div>
+    <div className="rounded-[18px] border border-black/[0.07] bg-black/[0.02] px-3 py-3 dark:border-white/[0.08] dark:bg-white/[0.035]">
+      <div className="text-[9.5px] uppercase tracking-[0.16em] text-black/35 dark:text-white/30">
+        {label}
+      </div>
       <div className="mt-1.5 flex items-baseline gap-1">
         <span
           className="font-outfit text-[19px] font-extrabold leading-none tabular-nums"
-          style={{ color: tone || "#fff" }}
+          style={tone ? { color: tone } : undefined}
         >
           {value}
         </span>
-        <span className="text-[10px] text-white/30">{unit}</span>
+        <span className="text-[10px] text-black/30 dark:text-white/30">{unit}</span>
       </div>
     </div>
   );
